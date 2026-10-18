@@ -19,6 +19,16 @@
         "alwaysOnTop": true,
         "resizable": false,
         "skipTaskbar": true
+      },
+      {
+        "label": "settings",
+        "title": "UniFi Widget Settings",
+        "url": "settings.html",
+        "width": 460,
+        "height": 640,
+        "visible": false,
+        "center": true,
+        "resizable": true
       }
     ],
     "security": {

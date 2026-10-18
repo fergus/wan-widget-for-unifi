@@ -52,9 +52,9 @@ The UI never calls the gateway; the key stays in the Rust process.
 | # | Milestone | Status |
 |---|---|---|
 | M0 | Probe the API; confirm endpoints and fields | Done |
-| M1 | `widget-core` with fixture-driven tests | Done (30 tests) |
-| M1b | UI graph helpers and formatters with tests | Done (6 tests) |
-| M2 | Tauri shell, poller, config, first-run settings screen (gateway URL, API key, billing day, timezone, poll interval, lookup URL) | Shell scaffolded, **uncompiled**; settings screen not started |
+| M1 | `widget-core` with fixture-driven tests | Done (31 tests) |
+| M1b | UI graph helpers, formatters and settings-form logic with tests | Done (16 tests) |
+| M2 | Tauri shell, poller, config, settings window (gateway URL, API key, site, poll interval, billing day, timezone, lookup, self-signed certs, test connection) | Written, **uncompiled and not run in WebView2** |
 | M3 | Tray icon (quit, click-through, settings), remembered window position, autostart | Not started |
 | M4 | NSIS installer build on Windows, icons | Not started |
 | M5 | Hardening: certificate pinning, backoff on gateway errors, stale-data indicator | Not started |
@@ -62,7 +62,7 @@ The UI never calls the gateway; the key stays in the Rust process.
 ## Risks and open items
 
 - **Rust shell unverified.** `src-tauri` has not been compiled (no WebKit/WebView2 toolchain here). Expect small fixes on first Windows build.
-- **No UI to enter the API key yet.** The `set_api_key` / `save_settings` commands exist; the settings screen that calls them is M2.
+- **Settings window unverified.** Pure form logic is tested; the page, the Tauri commands and the window show/hide behaviour have not been run.
 - **Polling cost.** 2 s polling of `stat/health` on the gateway is assumed cheap; measure CPU on the UCG Ultra during M2.
 - **Timezone mismatch** between the setting and the controller shifts the cycle boundary by hours. Consider reading the site timezone from the controller later.
 - **Monthly figure lags** if the controller updates the current-day bucket only hourly. Verify during M2 and note in the UI if so.

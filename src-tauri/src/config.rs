@@ -41,6 +41,10 @@ pub fn save_api_key(key: &str) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+pub fn has_api_key() -> bool {
+    load_api_key().is_some()
+}
+
 pub fn load_api_key() -> Option<String> {
     keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
         .ok()

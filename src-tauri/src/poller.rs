@@ -54,7 +54,7 @@ async fn fetch_monthly(c: &reqwest::Client, s: &Settings, key: &str) -> Result<M
     let tz = s.tz().ok_or("bad timezone")?;
     let now = Utc::now();
     let start = usage::cycle_start(now, s.billing_day, tz);
-    let url = format!("{}/proxy/network/api/s/{}/stat/report/daily.site", s.gateway_url, s.site);
+    let url = unifi::daily_report_url(&s.gateway_url, &s.site);
     let body = unifi::daily_report_request(start.timestamp_millis(), now.timestamp_millis());
     let resp = c
         .post(url)
@@ -71,6 +71,20 @@ async fn fetch_monthly(c: &reqwest::Client, s: &Settings, key: &str) -> Result<M
     let buckets = unifi::parse_daily_report(&text).map_err(|e| e.to_string())?;
     let t = usage::monthly_totals(&buckets, start);
     Ok(Monthly { rx: t.rx_bytes, tx: t.tx_bytes })
+}
+
+/// One-off health request with the given (possibly unsaved) settings and key.
+pub async fn test_connection(s: &Settings, key: &str) -> Result<String, String> {
+    s.validate().map_err(|errs| errs.join("; "))?;
+    let c = client(s).map_err(|e| e.to_string())?;
+    let body = get_text(&c, &unifi::health_url(&s.gateway_url, &s.site), Some(key)).await?;
+    let h = unifi::parse_health(&body).map_err(|e| e.to_string())?;
+    Ok(format!(
+        "Connected{}: {} B/s down, {} B/s up",
+        h.isp_name.map(|n| format!(" ({n})")).unwrap_or_default(),
+        h.rx_bytes_per_s,
+        h.tx_bytes_per_s
+    ))
 }
 
 pub async fn run(app: AppHandle) {

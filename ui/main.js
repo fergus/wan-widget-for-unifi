@@ -57,7 +57,13 @@ function onStatus(message) {
 }
 
 const tauri = window.__TAURI__;
+const openSettings = () => tauri && tauri.core && tauri.core.invoke("open_settings");
+$("gear").addEventListener("click", openSettings);
+$("status").addEventListener("click", openSettings);
+
 if (tauri && tauri.event) {
+  // First run: no key stored yet, so go straight to the settings window.
+  tauri.core.invoke("has_api_key").then((stored) => stored || openSettings());
   tauri.event.listen("wan-rates", (e) => onRates(e.payload));
   tauri.event.listen("monthly-usage", (e) => onMonthly(e.payload));
   tauri.event.listen("ip-info", (e) => onIp(e.payload));

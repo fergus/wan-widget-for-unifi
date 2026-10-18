@@ -35,6 +35,18 @@ fn parse_envelope<T: for<'de> Deserialize<'de>>(body: &str) -> Result<Vec<T>, Pa
     Ok(env.data)
 }
 
+fn site_base(gateway_url: &str, site: &str) -> String {
+    format!("{}/proxy/network/api/s/{}", gateway_url.trim_end_matches('/'), site)
+}
+
+pub fn health_url(gateway_url: &str, site: &str) -> String {
+    format!("{}/stat/health", site_base(gateway_url, site))
+}
+
+pub fn daily_report_url(gateway_url: &str, site: &str) -> String {
+    format!("{}/stat/report/daily.site", site_base(gateway_url, site))
+}
+
 /// Live WAN throughput and address from `stat/health`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WanHealth {
@@ -171,6 +183,22 @@ mod tests {
         assert_eq!(b[0].start_ms, 1000);
         assert_eq!(b[0].tx_bytes, 0);
         assert_eq!(b[1].rx_bytes, 2000);
+    }
+
+    #[test]
+    fn urls_tolerate_trailing_slashes() {
+        assert_eq!(
+            health_url("https://192.168.1.1", "default"),
+            "https://192.168.1.1/proxy/network/api/s/default/stat/health"
+        );
+        assert_eq!(
+            health_url("https://192.168.1.1///", "default"),
+            health_url("https://192.168.1.1", "default")
+        );
+        assert_eq!(
+            daily_report_url("https://gw.lan:8443/", "abc"),
+            "https://gw.lan:8443/proxy/network/api/s/abc/stat/report/daily.site"
+        );
     }
 
     #[test]

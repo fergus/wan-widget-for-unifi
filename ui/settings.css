@@ -1,0 +1,47 @@
+:root {
+  --bg: #f4f6f9;
+  --panel: #ffffff;
+  --fg: #1b2330;
+  --muted: #5d687a;
+  --line: #cfd6e0;
+  --accent: #1f6fd1;
+  --accent-fg: #ffffff;
+  --bad: #b3261e;
+  --good: #0f7a4d;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14181f;
+    --panel: #1c222c;
+    --fg: #e8ecf2;
+    --muted: #9aa5b5;
+    --line: #333c4a;
+    --accent: #5aa9ff;
+    --accent-fg: #0b1220;
+    --bad: #ff8a80;
+    --good: #3ddc97;
+  }
+}
+html, body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 "Segoe UI", system-ui, sans-serif; }
+form { box-sizing: border-box; max-width: 460px; margin: 0 auto; padding: 16px 20px 20px; }
+h1 { margin: 0 0 12px; font-size: 18px; }
+fieldset { margin: 0 0 12px; padding: 10px 12px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+legend { padding: 0 6px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+label { display: block; margin-top: 8px; }
+label:first-of-type { margin-top: 0; }
+label.check { display: flex; align-items: center; gap: 8px; }
+input[type="text"], input[type="url"], input[type="password"] {
+  box-sizing: border-box; width: 100%; margin-top: 3px; padding: 6px 8px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit;
+}
+input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+.actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.spacer { flex: 1; }
+button { padding: 6px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); font: inherit; cursor: pointer; }
+button.primary { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
+button:disabled { opacity: 0.6; cursor: default; }
+.errors { margin: 0 0 8px; padding-left: 18px; color: var(--bad); }
+.result { margin: 0 0 8px; }
+.result.ok { color: var(--good); }
+.result.fail { color: var(--bad); }

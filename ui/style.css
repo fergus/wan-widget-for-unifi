@@ -19,6 +19,11 @@
 html, body { margin: 0; background: transparent; font: 13px/1.3 "Segoe UI", system-ui, sans-serif; color: var(--fg); }
 .card { box-sizing: border-box; width: 360px; padding: 12px 14px; border-radius: 12px; background: var(--bg); user-select: none; }
 header { display: flex; justify-content: space-between; font-size: 15px; font-weight: 600; }
+header { align-items: center; gap: 8px; }
+header .rate:first-of-type { margin-right: auto; }
+#gear { padding: 0 4px; border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
+#gear:hover, #gear:focus-visible { color: var(--fg); }
+.status { cursor: pointer; }
 .down { color: var(--down); }
 .up { color: var(--up); }
 canvas { display: block; width: 100%; height: 110px; margin: 8px 0; }
