@@ -29,6 +29,9 @@ cargo tauri icon path\to\1024px.png    # generates icons/ (required by the bundl
 cargo tauri dev
 ```
 
+The tray icon reuses the app icon, so `cargo tauri icon` must have been run or the app
+exits at startup with a message saying so.
+
 ## Configuration
 
 Settings live in `%APPDATA%\local.unifi-widget\settings.json` (see

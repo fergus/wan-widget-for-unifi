@@ -18,6 +18,8 @@ const stub = {
   set_api_key: async () => null,
   save_settings: async () => null,
   test_connection: async () => "Connected (preview): 0 B/s down, 0 B/s up",
+  get_autostart: async () => false,
+  set_autostart: async () => null,
 };
 const invoke = tauri && tauri.core ? tauri.core.invoke : (cmd, args) => stub[cmd](args);
 
@@ -70,8 +72,21 @@ async function refreshKeyHint() {
   return stored;
 }
 
+// Autostart is OS state (registry), not part of settings.json, so it is read and
+// written separately. The tray menu can change it too, hence the refresh on focus.
+let autostartKnown = false;
+
+async function refreshAutostart() {
+  autostartKnown = await invoke("get_autostart");
+  $("startWithWindows").checked = autostartKnown;
+}
+
 async function load() {
-  const [settings, stored] = await Promise.all([invoke("get_settings"), refreshKeyHint()]);
+  const [settings, stored] = await Promise.all([
+    invoke("get_settings"),
+    refreshKeyHint(),
+    refreshAutostart(),
+  ]);
   writeForm(toForm(settings));
   if (!stored) showResult("Enter your UniFi API key to start.", false);
   if (typeof Intl.supportedValuesOf === "function") {
@@ -91,6 +106,11 @@ async function onSave(e) {
     const key = $("apiKey").value.trim();
     if (key) await invoke("set_api_key", { key });
     await invoke("save_settings", { settings });
+    const wantAutostart = $("startWithWindows").checked;
+    if (wantAutostart !== autostartKnown) {
+      await invoke("set_autostart", { enabled: wantAutostart });
+      autostartKnown = wantAutostart;
+    }
     $("apiKey").value = "";
     await refreshKeyHint();
     showErrors([]);
@@ -124,5 +144,9 @@ $("lookupEnabled").addEventListener("change", syncLookup);
 $("close").addEventListener("click", () => {
   if (tauri && tauri.window) tauri.window.getCurrentWindow().hide();
   else window.close();
+});
+window.addEventListener("focus", () => {
+  // Do not clobber an unsaved change the user has made to the checkbox.
+  if ($("startWithWindows").checked === autostartKnown) refreshAutostart().catch(() => {});
 });
 load().catch((err) => showErrors(errorList(err)));

@@ -20,6 +20,7 @@ Data comes from the UniFi gateway at `192.168.1.1` (UCG Ultra, Network app 10.6.
 | Monthly usage | `POST .../stat/report/daily.site` (`wan-rx_bytes`, `wan-tx_bytes`), summed from cycle start | Controller keeps history while the PC is off; newest bucket already holds today's partial total, so do not add live rates |
 | External IP | Configurable public lookup (default `https://api.ipify.org`, ~5 min) plus gateway WAN IP and a CGNAT badge | The gateway reports `100.96.x.x` (CGNAT), not the public IP |
 | Window | Frameless, transparent, always-on-top, draggable, remembers position, tray with click-through toggle | Simplest reliable behaviour on Win11 |
+| Tray and autostart | Tray menu plus a settings checkbox, both reading the real registry state; autostart off until opted in; click-through never persisted so it cannot lock you out | Chosen 2026-10-18 |
 | Secrets | API key in Windows Credential Manager; entered at first run; never in the settings file | Requirement from the user |
 
 ## Findings that shaped the design
@@ -55,7 +56,8 @@ The UI never calls the gateway; the key stays in the Rust process.
 | M1 | `widget-core` with fixture-driven tests | Done (31 tests) |
 | M1b | UI graph helpers, formatters and settings-form logic with tests | Done (16 tests) |
 | M2 | Tauri shell, poller, config, settings window (gateway URL, API key, site, poll interval, billing day, timezone, lookup, self-signed certs, test connection) | Written, **uncompiled and not run in WebView2** |
-| M3 | Tray icon (quit, click-through, settings), remembered window position, autostart | Not started |
+| M3 | Tray icon (show/hide, click-through, settings, autostart, quit) and autostart (HKCU Run key, off by default) | Written, **uncompiled and not run** |
+| M3b | Remembered window position | Not started |
 | M4 | NSIS installer build on Windows, icons | Not started |
 | M5 | Hardening: certificate pinning, backoff on gateway errors, stale-data indicator | Not started |
 

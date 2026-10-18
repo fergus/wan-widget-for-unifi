@@ -2,8 +2,10 @@
 
 mod config;
 mod poller;
+mod tray;
 
-use tauri::Manager;
+use tauri::{AppHandle, Manager};
+use tauri_plugin_autostart::ManagerExt;
 use widget_core::settings::Settings;
 
 #[tauri::command]
@@ -17,12 +19,12 @@ fn set_api_key(key: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_settings(app: tauri::AppHandle) -> Settings {
+fn get_settings(app: AppHandle) -> Settings {
     config::load_settings(&app)
 }
 
 #[tauri::command]
-fn save_settings(app: tauri::AppHandle, settings: Settings) -> Result<(), Vec<String>> {
+fn save_settings(app: AppHandle, settings: Settings) -> Result<(), Vec<String>> {
     config::save_settings(&app, &settings)
 }
 
@@ -37,8 +39,7 @@ async fn test_connection(settings: Settings, key: Option<String>) -> Result<Stri
     poller::test_connection(&settings, &key).await
 }
 
-#[tauri::command]
-fn open_settings(app: tauri::AppHandle) -> Result<(), String> {
+pub fn show_settings(app: &AppHandle) -> Result<(), String> {
     let w = app
         .get_webview_window("settings")
         .ok_or("settings window is missing")?;
@@ -46,15 +47,45 @@ fn open_settings(app: tauri::AppHandle) -> Result<(), String> {
     w.set_focus().map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn open_settings(app: AppHandle) -> Result<(), String> {
+    show_settings(&app)
+}
+
+/// Reads the real OS state (registry Run key) rather than a saved flag.
+#[tauri::command]
+fn get_autostart(app: AppHandle) -> bool {
+    app.autolaunch().is_enabled().unwrap_or(false)
+}
+
+#[tauri::command]
+fn set_autostart(
+    app: AppHandle,
+    tray: tauri::State<tray::TrayState>,
+    enabled: bool,
+) -> Result<(), String> {
+    let al = app.autolaunch();
+    let result = if enabled { al.enable() } else { al.disable() };
+    result.map_err(|e| e.to_string())?;
+    let _ = tray.autostart.set_checked(enabled);
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![
             has_api_key,
             set_api_key,
             get_settings,
             save_settings,
             test_connection,
-            open_settings
+            open_settings,
+            get_autostart,
+            set_autostart
         ])
         // Closing the settings window hides it so it can be reopened from the widget.
         .on_window_event(|window, event| {
@@ -66,6 +97,7 @@ fn main() {
             }
         })
         .setup(|app| {
+            tray::build(app.handle())?;
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(poller::run(handle));
             Ok(())
