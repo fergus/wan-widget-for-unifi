@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UniFi Widget</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card" data-tauri-drag-region>
+    <header data-tauri-drag-region>
+      <span class="rate down" id="rx">-</span>
+      <span class="rate up" id="tx">-</span>
+    </header>
+    <canvas id="graph" width="320" height="110"></canvas>
+    <footer>
+      <div><span class="label">Month</span> <span id="month">-</span></div>
+      <div>
+        <span class="label">IP</span> <span id="ip">-</span>
+        <span id="cgnat" class="badge" hidden title="Gateway WAN address differs from your public IP">CGNAT</span>
+      </div>
+    </footer>
+    <div id="status" class="status" hidden></div>
+  </main>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

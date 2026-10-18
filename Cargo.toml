@@ -1,0 +1,5 @@
+[workspace]
+resolver = "2"
+members = ["crates/widget-core"]
+# src-tauri needs the WebKit/WebView2 toolchain; it is built on Windows only.
+exclude = ["src-tauri"]

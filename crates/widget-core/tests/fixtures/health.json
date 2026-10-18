@@ -1,0 +1,6 @@
+{"meta":{"rc":"ok"},"data":[
+{"subsystem":"wlan","num_user":28,"tx_bytes-r":438291,"rx_bytes-r":219544,"status":"ok"},
+{"subsystem":"wan","status":"ok","wan_ip":"100.64.10.20","tx_bytes-r":356527,"rx_bytes-r":513102,"gw_name":"UCG Ultra","isp_name":"ExampleISP"},
+{"subsystem":"www","status":"ok","tx_bytes-r":356527,"rx_bytes-r":513102,"latency":9},
+{"subsystem":"vpn","status":"unknown"}
+]}

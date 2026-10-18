@@ -1,0 +1,138 @@
+//! Background polling. Emits events to the UI; the API key never leaves this process.
+
+use std::time::Duration;
+
+use chrono::Utc;
+use serde::Serialize;
+use tauri::{AppHandle, Emitter};
+use widget_core::{ip, settings::Settings, unifi, usage};
+
+use crate::config;
+
+const MONTHLY_EVERY: Duration = Duration::from_secs(300);
+const IP_EVERY: Duration = Duration::from_secs(300);
+
+#[derive(Serialize, Clone)]
+struct Rates {
+    rx: u64,
+    tx: u64,
+}
+
+#[derive(Serialize, Clone)]
+struct Monthly {
+    rx: u64,
+    tx: u64,
+}
+
+#[derive(Serialize, Clone)]
+struct IpInfo {
+    external: Option<String>,
+    wan: Option<String>,
+    cgnat: bool,
+}
+
+fn client(s: &Settings) -> Result<reqwest::Client, reqwest::Error> {
+    reqwest::Client::builder()
+        .danger_accept_invalid_certs(s.accept_invalid_certs)
+        .timeout(Duration::from_secs(8))
+        .build()
+}
+
+async fn get_text(c: &reqwest::Client, url: &str, key: Option<&str>) -> Result<String, String> {
+    let mut req = c.get(url);
+    if let Some(k) = key {
+        req = req.header("X-API-KEY", k);
+    }
+    let resp = req.send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    resp.text().await.map_err(|e| e.to_string())
+}
+
+async fn fetch_monthly(c: &reqwest::Client, s: &Settings, key: &str) -> Result<Monthly, String> {
+    let tz = s.tz().ok_or("bad timezone")?;
+    let now = Utc::now();
+    let start = usage::cycle_start(now, s.billing_day, tz);
+    let url = format!("{}/proxy/network/api/s/{}/stat/report/daily.site", s.gateway_url, s.site);
+    let body = unifi::daily_report_request(start.timestamp_millis(), now.timestamp_millis());
+    let resp = c
+        .post(url)
+        .header("X-API-KEY", key)
+        .header("Content-Type", "application/json")
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+    let buckets = unifi::parse_daily_report(&text).map_err(|e| e.to_string())?;
+    let t = usage::monthly_totals(&buckets, start);
+    Ok(Monthly { rx: t.rx_bytes, tx: t.tx_bytes })
+}
+
+pub async fn run(app: AppHandle) {
+    let mut last_monthly: Option<std::time::Instant> = None;
+    let mut last_ip: Option<std::time::Instant> = None;
+    let mut wan_ip: Option<std::net::IpAddr> = None;
+
+    loop {
+        // Re-read each cycle so settings and key changes apply without a restart.
+        let s = config::load_settings(&app);
+        let Some(key) = config::load_api_key() else {
+            let _ = app.emit("poll-status", "No API key set");
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            continue;
+        };
+        let Ok(c) = client(&s) else {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            continue;
+        };
+
+        let health_url = unifi::health_url(&s.gateway_url, &s.site);
+        match get_text(&c, &health_url, Some(&key)).await.and_then(|b| {
+            unifi::parse_health(&b).map_err(|e| e.to_string())
+        }) {
+            Ok(h) => {
+                wan_ip = h.wan_ip;
+                let _ = app.emit("poll-status", "");
+                let _ = app.emit("wan-rates", Rates { rx: h.rx_bytes_per_s, tx: h.tx_bytes_per_s });
+            }
+            Err(e) => {
+                let _ = app.emit("poll-status", format!("Gateway: {e}"));
+            }
+        }
+
+        if last_monthly.map_or(true, |t| t.elapsed() >= MONTHLY_EVERY) {
+            if let Ok(m) = fetch_monthly(&c, &s, &key).await {
+                last_monthly = Some(std::time::Instant::now());
+                let _ = app.emit("monthly-usage", m);
+            }
+        }
+
+        if last_ip.map_or(true, |t| t.elapsed() >= IP_EVERY) {
+            let external = if s.ip_lookup_url.is_empty() {
+                None
+            } else {
+                get_text(&c, &s.ip_lookup_url, None)
+                    .await
+                    .ok()
+                    .and_then(|b| ip::parse_lookup(&b).ok())
+            };
+            last_ip = Some(std::time::Instant::now());
+            let v = ip::ip_view(external, wan_ip);
+            let _ = app.emit(
+                "ip-info",
+                IpInfo {
+                    external: v.external.map(|i| i.to_string()),
+                    wan: v.wan.map(|i| i.to_string()),
+                    cgnat: v.cgnat,
+                },
+            );
+        }
+
+        tokio::time::sleep(Duration::from_millis(s.poll_interval_ms)).await;
+    }
+}
