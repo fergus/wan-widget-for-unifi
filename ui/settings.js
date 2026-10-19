@@ -24,6 +24,7 @@ const stub = {
   set_autostart: async () => null,
   get_pinned: async () => false,
   set_pinned: async () => null,
+  forget_pin: async () => null,
 };
 const invoke = tauri && tauri.core ? tauri.core.invoke : (cmd, args) => stub[cmd](args);
 
@@ -157,8 +158,19 @@ async function onTest() {
   }
 }
 
+async function onForgetPin() {
+  showResult("");
+  try {
+    await invoke("forget_pin");
+    showResult("Pinned certificate forgotten. The next connection pins the one it presents.", true);
+  } catch (err) {
+    showResult(errorList(err).join("; "), false);
+  }
+}
+
 $("form").addEventListener("submit", onSave);
 $("test").addEventListener("click", onTest);
+$("forgetPin").addEventListener("click", onForgetPin);
 $("lookupEnabled").addEventListener("change", syncLookup);
 // Preview the chosen theme straight away; the value is saved with the other settings.
 $("theme").addEventListener("change", () => applyTheme($("theme").value));

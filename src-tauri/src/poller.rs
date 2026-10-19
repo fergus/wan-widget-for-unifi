@@ -1,5 +1,6 @@
 //! Background polling. Emits events to the UI; the API key never leaves this process.
 
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -8,7 +9,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use widget_core::{ip, settings::Settings, unifi, usage};
 
-use crate::config;
+use crate::{config, pin};
 
 const MONTHLY_EVERY: Duration = Duration::from_secs(300);
 const MONTHLY_RETRY: Duration = Duration::from_secs(60);
@@ -63,11 +64,24 @@ impl Latest {
     }
 }
 
-fn client(s: &Settings) -> Result<reqwest::Client, reqwest::Error> {
+/// Gateway client. With accept_invalid_certs the gateway's self-signed certificate is
+/// checked against the pin in pin_path instead of the public CA roots.
+fn client(s: &Settings, pin_path: &Path) -> Result<reqwest::Client, String> {
+    let builder = reqwest::Client::builder().timeout(Duration::from_secs(8));
+    let builder = if s.accept_invalid_certs {
+        builder.use_preconfigured_tls(pin::tls_config(pin_path.to_path_buf()).map_err(|e| e.to_string())?)
+    } else {
+        builder
+    };
+    builder.build().map_err(|e| e.to_string())
+}
+
+/// Client for public hosts such as the IP lookup. Must not use the gateway pin.
+fn plain_client() -> reqwest::Client {
     reqwest::Client::builder()
-        .danger_accept_invalid_certs(s.accept_invalid_certs)
         .timeout(Duration::from_secs(8))
         .build()
+        .unwrap_or_default()
 }
 
 async fn get_text(c: &reqwest::Client, url: &str, key: Option<&str>) -> Result<String, String> {
@@ -106,9 +120,9 @@ async fn fetch_monthly(c: &reqwest::Client, s: &Settings, key: &str) -> Result<M
 }
 
 /// One-off health request with the given (possibly unsaved) settings and key.
-pub async fn test_connection(s: &Settings, key: &str) -> Result<String, String> {
+pub async fn test_connection(s: &Settings, key: &str, pin_path: &Path) -> Result<String, String> {
     s.validate().map_err(|errs| errs.join("; "))?;
-    let c = client(s).map_err(|e| e.to_string())?;
+    let c = client(s, pin_path)?;
     let body = get_text(&c, &unifi::health_url(&s.gateway_url, &s.site), Some(key)).await?;
     let h = unifi::parse_health(&body).map_err(|e| e.to_string())?;
     Ok(format!(
@@ -121,6 +135,7 @@ pub async fn test_connection(s: &Settings, key: &str) -> Result<String, String> 
 
 pub async fn run(app: AppHandle) {
     let latest: Arc<Latest> = (*app.state::<Arc<Latest>>()).clone();
+    let pin_path: PathBuf = pin::path(&app).unwrap_or_default();
     let mut last_theme: Option<String> = None;
     let mut failures: u32 = 0;
     let mut monthly_due = std::time::Instant::now();
@@ -140,9 +155,13 @@ pub async fn run(app: AppHandle) {
             tokio::time::sleep(Duration::from_secs(2)).await;
             continue;
         };
-        let Ok(c) = client(&s) else {
-            tokio::time::sleep(Duration::from_secs(5)).await;
-            continue;
+        let c = match client(&s, &pin_path) {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = app.emit("poll-status", format!("Gateway: {e}"));
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                continue;
+            }
         };
 
         let health_url = unifi::health_url(&s.gateway_url, &s.site);
@@ -157,7 +176,12 @@ pub async fn run(app: AppHandle) {
             }
             Err(e) => {
                 failures = failures.saturating_add(1);
-                let _ = app.emit("poll-status", format!("Gateway: {e}"));
+                let msg = if pin::mismatch() {
+                    "Gateway certificate changed. Forget the pin in Settings if that is expected".to_string()
+                } else {
+                    format!("Gateway: {e}")
+                };
+                let _ = app.emit("poll-status", msg);
             }
         }
 
@@ -182,7 +206,7 @@ pub async fn run(app: AppHandle) {
             let external = if s.ip_lookup_url.is_empty() {
                 None
             } else {
-                match get_text(&c, &s.ip_lookup_url, None).await {
+                match get_text(&plain_client(), &s.ip_lookup_url, None).await {
                     Ok(b) => ip::parse_lookup(&b)
                         .map_err(|e| eprintln!("ip lookup parse: {e}"))
                         .ok(),

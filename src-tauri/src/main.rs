@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod config;
+mod pin;
 mod poller;
 mod tray;
 mod window_state;
@@ -33,13 +34,24 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<(), Vec<String>> 
 
 /// `key` is optional: blank or missing means "use the stored key".
 #[tauri::command]
-async fn test_connection(settings: Settings, key: Option<String>) -> Result<String, String> {
+async fn test_connection(
+    app: AppHandle,
+    settings: Settings,
+    key: Option<String>,
+) -> Result<String, String> {
     let key = key
         .map(|k| k.trim().to_string())
         .filter(|k| !k.is_empty())
         .or_else(config::load_api_key)
         .ok_or("No API key entered or stored")?;
-    poller::test_connection(&settings, &key).await
+    let pin_path = pin::path(&app).unwrap_or_default();
+    poller::test_connection(&settings, &key, &pin_path).await
+}
+
+/// Forgets the stored gateway certificate pin, so the next certificate is trusted.
+#[tauri::command]
+fn forget_pin(app: AppHandle) {
+    pin::forget(&app);
 }
 
 pub fn show_settings(app: &AppHandle) -> Result<(), String> {
@@ -111,7 +123,8 @@ fn main() {
             set_autostart,
             get_pinned,
             set_pinned,
-            latest_snapshot
+            latest_snapshot,
+            forget_pin
         ])
         // Closing the settings window hides it so it can be reopened from the widget.
         .on_window_event(|window, event| {

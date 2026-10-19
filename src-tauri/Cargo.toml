@@ -17,3 +17,5 @@ tokio = { version = "1", features = ["time"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 keyring = { version = "3", features = ["windows-native"] }
 winreg = "0.56"
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "ring"] }
+sha2 = "0.10"
