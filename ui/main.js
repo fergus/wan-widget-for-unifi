@@ -81,3 +81,13 @@ if (tauri && tauri.event) {
     });
   }, 500);
 }
+
+// Keep the window exactly as tall as the card, so no transparent strip shows below it.
+if (tauri && tauri.window && typeof ResizeObserver === "function") {
+  const win = tauri.window.getCurrentWindow();
+  const card = document.querySelector(".card");
+  new ResizeObserver(() => {
+    const height = Math.ceil(card.getBoundingClientRect().height);
+    win.setSize(new tauri.window.LogicalSize(card.offsetWidth, height)).catch(() => {});
+  }).observe(card);
+}
