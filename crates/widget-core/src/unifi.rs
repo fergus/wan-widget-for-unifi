@@ -51,6 +51,24 @@ pub fn daily_report_url(gateway_url: &str, site: &str) -> String {
     format!("{}/stat/report/daily.site", site_base(gateway_url, site))
 }
 
+pub fn sysinfo_url(gateway_url: &str, site: &str) -> String {
+    format!("{}/stat/sysinfo", site_base(gateway_url, site))
+}
+
+#[derive(Deserialize)]
+struct SysinfoEntry {
+    timezone: Option<String>,
+}
+
+/// The controller's IANA timezone from `stat/sysinfo`, if it reports one. Daily report
+/// buckets start at local midnight in this zone.
+pub fn parse_sysinfo_timezone(body: &str) -> Result<Option<String>, ParseError> {
+    Ok(parse_envelope::<SysinfoEntry>(body)?
+        .into_iter()
+        .find_map(|e| e.timezone)
+        .filter(|tz| !tz.is_empty()))
+}
+
 /// Live WAN throughput and address from `stat/health`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WanHealth {
@@ -130,6 +148,29 @@ mod tests {
     const HEALTH: &str = include_str!("../tests/fixtures/health.json");
     const DAILY: &str = include_str!("../tests/fixtures/daily_report.json");
     const ERROR: &str = include_str!("../tests/fixtures/error.json");
+    const SYSINFO: &str = include_str!("../tests/fixtures/sysinfo.json");
+
+    #[test]
+    fn sysinfo_reports_the_controller_timezone() {
+        assert_eq!(
+            parse_sysinfo_timezone(SYSINFO),
+            Ok(Some("Australia/Sydney".into()))
+        );
+        assert_eq!(
+            sysinfo_url("https://192.168.1.1/", "default"),
+            "https://192.168.1.1/proxy/network/api/s/default/stat/sysinfo"
+        );
+    }
+
+    #[test]
+    fn sysinfo_without_timezone_is_none() {
+        let body = r#"{"meta":{"rc":"ok"},"data":[{"uptime":1},{"timezone":""}]}"#;
+        assert_eq!(parse_sysinfo_timezone(body), Ok(None));
+        assert!(matches!(
+            parse_sysinfo_timezone(ERROR),
+            Err(ParseError::Controller(_))
+        ));
+    }
 
     #[test]
     fn health_picks_wan_subsystem_not_wlan() {

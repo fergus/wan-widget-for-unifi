@@ -29,8 +29,9 @@ start with Windows.
    create an API key.
 2. Start the widget. On first run it opens Settings: enter the gateway address
    (default `https://192.168.1.1`), paste the API key, and press **Test connection**.
-3. Set your billing day and timezone so the monthly figure resets when your ISP's
-   month does. The timezone should match the one set on the controller.
+3. Set your billing day so the monthly figure resets when your ISP's month does. The
+   month starts at midnight in the gateway's timezone, which the widget reads from the
+   gateway. Set a timezone only to override it.
 
 The gateway uses a self-signed certificate. The widget trusts the certificate it sees
 on the first connection and refuses a different one later, until you press

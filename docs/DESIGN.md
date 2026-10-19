@@ -10,6 +10,7 @@ All gateway calls use the classic UniFi Network local API on UniFi OS
 | What | Endpoint | Notes |
 |---|---|---|
 | Live rates | `GET .../stat/health`, `wan` entry, `rx_bytes-r` / `tx_bytes-r` | Already bytes per second, so no counter-delta maths |
+| Billing timezone | `GET .../stat/sysinfo`, `timezone` | Used unless the timezone setting overrides it, falling back to the PC's zone |
 | Monthly usage | `POST .../stat/report/daily.site` with `wan-rx_bytes`, `wan-tx_bytes`, summed from the cycle start | The controller keeps history while the PC is off. The newest bucket already holds today's partial total, so live rates are not added on top |
 | External IP | A configurable public lookup (default `https://api.ipify.org`, every 5 minutes), plus the gateway's WAN IP from `stat/health` | Behind carrier-grade NAT the gateway's WAN address is not the public one |
 
@@ -23,7 +24,8 @@ isolated in `widget-core::unifi` and tested against recorded, sanitised fixtures
   CGNAT badge.
 - **Daily buckets start at local midnight in the controller's timezone.** The billing
   cycle start therefore uses a real IANA zone, not a fixed offset, and is tested across
-  DST, month-length and year boundaries. The zone setting must match the controller's.
+  DST, month-length and year boundaries. The zone comes from the controller
+  (`stat/sysinfo`), so it matches the buckets unless the user overrides it.
 - **Self-signed certificates.** UniFi gateways ship one, so public CA validation is
   replaced by trust-on-first-use pinning of the leaf certificate's SHA-256.
 
@@ -70,9 +72,8 @@ crates/widget-core (pure, no I/O, tested on Linux)
 - **Trust on first use.** The first connection decides which certificate is trusted.
   If the gateway's certificate is regenerated, the widget refuses it until you press
   Forget pinned certificate.
-- **Timezone mismatch.** If the timezone setting differs from the controller's, the
-  cycle boundary shifts by hours. Reading the site timezone from the controller would
-  remove the setting.
+- **Timezone override.** A timezone setting that differs from the controller's shifts
+  the cycle boundary by hours. Test connection warns when they differ.
 - **Monthly figure lag.** If the controller updates the current day's bucket only
   hourly, the monthly total lags by up to an hour.
 - **Polling cost.** Polling `stat/health` every 2 s is assumed cheap for the gateway but

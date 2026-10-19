@@ -11,6 +11,7 @@ pub struct Settings {
     pub site: String,
     pub poll_interval_ms: u64,
     pub billing_day: u32,
+    /// IANA zone for the billing cycle. Empty (the default) uses the gateway's zone.
     pub timezone: String,
     /// Empty string disables the external-IP lookup.
     pub ip_lookup_url: String,
@@ -27,7 +28,7 @@ impl Default for Settings {
             site: "default".into(),
             poll_interval_ms: 2000,
             billing_day: 1,
-            timezone: "Australia/Sydney".into(),
+            timezone: String::new(),
             ip_lookup_url: "https://api.ipify.org".into(),
             accept_invalid_certs: true,
             theme: "system".into(),
@@ -36,8 +37,17 @@ impl Default for Settings {
 }
 
 impl Settings {
+    /// The timezone override, or None when the setting is blank or unknown.
     pub fn tz(&self) -> Option<Tz> {
         self.timezone.parse().ok()
+    }
+
+    /// Zone for the billing cycle: the setting if given, else the gateway's, else the
+    /// PC's. Daily buckets follow the gateway's zone, so that is the right default.
+    pub fn resolve_tz(&self, gateway: Option<&str>, system: Option<&str>) -> Option<Tz> {
+        self.tz()
+            .or_else(|| gateway.and_then(|z| z.parse().ok()))
+            .or_else(|| system.and_then(|z| z.parse().ok()))
     }
 
     /// Returns every problem found, so the settings UI can show them all at once.
@@ -55,7 +65,7 @@ impl Settings {
         if !(1..=31).contains(&self.billing_day) {
             errs.push("billing_day must be between 1 and 31".into());
         }
-        if self.tz().is_none() {
+        if !self.timezone.is_empty() && self.tz().is_none() {
             errs.push(format!("unknown timezone '{}'", self.timezone));
         }
         if !self.ip_lookup_url.is_empty() && !self.ip_lookup_url.starts_with("https://") {
@@ -104,6 +114,38 @@ mod tests {
             ..Settings::default()
         };
         assert_eq!(s.validate().unwrap_err().len(), 4);
+    }
+
+    #[test]
+    fn blank_timezone_is_valid_and_follows_the_gateway() {
+        let s = Settings::default();
+        assert_eq!(s.validate(), Ok(()));
+        assert_eq!(
+            s.resolve_tz(Some("Europe/London"), Some("Australia/Perth")),
+            Some(chrono_tz::Europe::London)
+        );
+    }
+
+    #[test]
+    fn timezone_setting_overrides_the_gateway() {
+        let s = Settings {
+            timezone: "Pacific/Auckland".into(),
+            ..Settings::default()
+        };
+        assert_eq!(
+            s.resolve_tz(Some("Europe/London"), None),
+            Some(chrono_tz::Pacific::Auckland)
+        );
+    }
+
+    #[test]
+    fn unknown_gateway_zone_falls_back_to_the_pc() {
+        let s = Settings::default();
+        assert_eq!(
+            s.resolve_tz(Some("Not/AZone"), Some("Australia/Perth")),
+            Some(chrono_tz::Australia::Perth)
+        );
+        assert_eq!(s.resolve_tz(None, None), None);
     }
 
     #[test]

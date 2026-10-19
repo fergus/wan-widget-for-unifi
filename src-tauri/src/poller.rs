@@ -100,8 +100,22 @@ async fn get_text(c: &reqwest::Client, url: &str, key: Option<&str>) -> Result<S
     resp.text().await.map_err(|e| e.to_string())
 }
 
-async fn fetch_monthly(c: &reqwest::Client, s: &Settings, key: &str) -> Result<Monthly, String> {
-    let tz = s.tz().ok_or("bad timezone")?;
+/// The gateway's IANA timezone from stat/sysinfo, or None if it does not report one.
+async fn fetch_gateway_tz(
+    c: &reqwest::Client,
+    s: &Settings,
+    key: &str,
+) -> Result<Option<String>, String> {
+    let body = get_text(c, &unifi::sysinfo_url(&s.gateway_url, &s.site), Some(key)).await?;
+    unifi::parse_sysinfo_timezone(&body).map_err(|e| e.to_string())
+}
+
+async fn fetch_monthly(
+    c: &reqwest::Client,
+    s: &Settings,
+    key: &str,
+    tz: widget_core::Tz,
+) -> Result<Monthly, String> {
     let now = Utc::now();
     let start = usage::cycle_start(now, s.billing_day, tz);
     let url = unifi::daily_report_url(&s.gateway_url, &s.site);
@@ -133,8 +147,18 @@ pub async fn test_connection(s: &Settings, key: &str, pin_path: &Path) -> Result
     let c = client(s, pin_path, false)?;
     let body = get_text(&c, &unifi::health_url(&s.gateway_url, &s.site), Some(key)).await?;
     let h = unifi::parse_health(&body).map_err(|e| e.to_string())?;
+    // Daily buckets follow the gateway's zone, so say which one it is and flag an
+    // override that does not match it.
+    let tz_note = match (fetch_gateway_tz(&c, s, key).await.ok().flatten(), s.tz()) {
+        (Some(g), Some(set)) if set.name() != g => format!(
+            ". The timezone setting ({}) differs from the gateway's ({g}), so the month              may start at the wrong hour. Leave it blank to use the gateway's",
+            set.name()
+        ),
+        (Some(g), _) => format!(". Gateway timezone: {g}"),
+        (None, _) => String::new(),
+    };
     Ok(format!(
-        "Connected{}: {} B/s down, {} B/s up",
+        "Connected{}: {} B/s down, {} B/s up{tz_note}",
         h.isp_name.map(|n| format!(" ({n})")).unwrap_or_default(),
         h.rx_bytes_per_s,
         h.tx_bytes_per_s
@@ -154,6 +178,8 @@ pub async fn run(app: AppHandle) {
     let mut api_key: Option<String> = None;
     // Kept between polls so connections to the gateway are reused, not re-handshaken.
     let mut gateway: Option<reqwest::Client> = None;
+    // The gateway's own timezone, used when the timezone setting is blank.
+    let mut gateway_tz: Option<String> = None;
 
     loop {
         // Settings saves set the flag, so changes apply without a restart.
@@ -161,6 +187,9 @@ pub async fn run(app: AppHandle) {
             s = config::load_settings(&app);
             api_key = config::load_api_key();
             gateway = None;
+            gateway_tz = None;
+            // Billing day or timezone may have changed, so recompute the month now.
+            monthly_due = std::time::Instant::now();
             if last_theme.as_deref() != Some(s.theme.as_str()) {
                 let _ = app.emit("theme", s.theme.clone());
                 last_theme = Some(s.theme.clone());
@@ -218,7 +247,18 @@ pub async fn run(app: AppHandle) {
 
         let now = std::time::Instant::now();
         if now >= monthly_due {
-            match fetch_monthly(&c, &s, &key).await {
+            if s.tz().is_none() && gateway_tz.is_none() {
+                match fetch_gateway_tz(&c, &s, &key).await {
+                    Ok(z) => gateway_tz = z,
+                    Err(e) => eprintln!("gateway timezone: {e}"),
+                }
+            }
+            let system = iana_time_zone::get_timezone().ok();
+            let result = match s.resolve_tz(gateway_tz.as_deref(), system.as_deref()) {
+                Some(tz) => fetch_monthly(&c, &s, &key, tz).await,
+                None => Err("no timezone from the setting, the gateway or Windows".into()),
+            };
+            match result {
                 Ok(m) => {
                     monthly_due = std::time::Instant::now() + MONTHLY_EVERY;
                     if let Ok(mut g) = latest.monthly.lock() {

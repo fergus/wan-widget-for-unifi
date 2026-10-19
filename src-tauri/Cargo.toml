@@ -22,3 +22,4 @@ keyring = { version = "3", features = ["windows-native"] }
 winreg = "0.56"
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "ring"] }
 sha2 = "0.10"
+iana-time-zone = "0.1"

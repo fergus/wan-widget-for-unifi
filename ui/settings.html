@@ -43,9 +43,10 @@
       <label>Billing day of month (1 to 31)
         <input id="billingDay" type="text" inputmode="numeric">
       </label>
-      <label>Timezone (must match the controller)
-        <input id="timezone" type="text" list="zones" spellcheck="false">
+      <label>Timezone
+        <input id="timezone" type="text" list="zones" spellcheck="false" placeholder="Same as the gateway">
         <datalist id="zones"></datalist>
+        <small>Leave blank to use the gateway's timezone, which is what its daily totals follow. Test connection shows it.</small>
       </label>
     </fieldset>
 
