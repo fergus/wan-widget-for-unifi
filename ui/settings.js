@@ -28,6 +28,7 @@ const stub = {
   app_version: async () => "0.1.0",
   check_update: async () => null,
   install_update: async () => null,
+  open_log_folder: async () => null,
 };
 const invoke = tauri && tauri.core ? tauri.core.invoke : (cmd, args) => stub[cmd](args);
 
@@ -208,6 +209,9 @@ $("test").addEventListener("click", onTest);
 $("forgetPin").addEventListener("click", onForgetPin);
 $("checkUpdate").addEventListener("click", onCheckUpdate);
 $("installUpdate").addEventListener("click", onInstallUpdate);
+$("openLogs").addEventListener("click", () =>
+  invoke("open_log_folder").catch((err) => showResult(errorList(err).join("; "), false))
+);
 // The daily background check announces what it finds.
 if (tauri && tauri.event) {
   tauri.event.listen("update-available", (e) => showUpdate(e.payload, "Version " + e.payload + " is available."));

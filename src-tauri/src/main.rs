@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod config;
+mod errors;
 mod pin;
 mod poller;
 mod tray;
@@ -124,6 +125,18 @@ async fn install_update(app: AppHandle) -> Result<(), String> {
     updater::install(&app).await
 }
 
+/// Opens the folder holding the log file, for attaching to bug reports.
+#[tauri::command]
+fn open_log_folder(app: AppHandle) -> Result<(), String> {
+    let dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::process::Command::new("explorer")
+        .arg(&dir)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
 fn main() {
     tauri::Builder::default()
         // Must be the first plugin. A second launch exits and brings this widget forward.
@@ -133,6 +146,18 @@ fn main() {
                 let _ = w.set_focus();
             }
         }))
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .level_for("reqwest", log::LevelFilter::Warn)
+                .level_for("hyper_util", log::LevelFilter::Warn)
+                .level_for("rustls", log::LevelFilter::Warn)
+                // Raw request errors are logged at debug level, for bug reports.
+                .level_for("unifi_widget", log::LevelFilter::Debug)
+                .max_file_size(1_000_000)
+                .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
+                .build(),
+        )
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -153,7 +178,8 @@ fn main() {
             forget_pin,
             app_version,
             check_update,
-            install_update
+            install_update,
+            open_log_folder
         ])
         // Closing the settings window hides it so it can be reopened from the widget.
         .on_window_event(|window, event| {
@@ -170,6 +196,7 @@ fn main() {
             }
         })
         .setup(|app| {
+            log::info!("started version {}", app.package_info().version);
             // The main window is created hidden (tauri.conf.json) so it appears
             // at the restored spot instead of jumping there after it is shown.
             if let Some(main) = app.get_webview_window("main") {

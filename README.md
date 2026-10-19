@@ -54,6 +54,9 @@ Other files in the same folder, all written by the app:
 - `window.json`: window position and the Pin to desktop choice.
 - `gateway-pin.json`: SHA-256 of the gateway's certificate, pinned on first connection.
 
+Errors go to a log file in `%LOCALAPPDATA%\io.github.fergus.unifi-widget\logs`
+(Settings > Open log folder). Attach it to bug reports; it never contains the API key.
+
 The installer installs per user to `%LOCALAPPDATA%\WAN Widget for UniFi`. Start with
 Windows writes an HKCU Run entry that points at the exe it was enabled from, so turn it
 off and on again after moving the app.

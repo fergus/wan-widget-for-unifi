@@ -65,7 +65,7 @@ pub async fn run(app: AppHandle) {
     tokio::time::sleep(FIRST_CHECK_AFTER).await;
     loop {
         if let Err(e) = check(&app).await {
-            eprintln!("update check: {e}");
+            log::warn!("update check: {e}");
         }
         tokio::time::sleep(CHECK_EVERY).await;
     }
@@ -83,7 +83,7 @@ fn has_pending(app: &AppHandle) -> bool {
 pub async fn tray_clicked(app: AppHandle) {
     if has_pending(&app) {
         if let Err(e) = install(&app).await {
-            eprintln!("update install: {e}");
+            log::warn!("update install: {e}");
             crate::tray::set_update_text(&app, "Update failed. Try again from Settings");
         }
         return;
@@ -92,7 +92,7 @@ pub async fn tray_clicked(app: AppHandle) {
         Ok(Some(_)) => {}
         Ok(None) => crate::tray::set_update_text(&app, "No update available"),
         Err(e) => {
-            eprintln!("update check: {e}");
+            log::warn!("update check: {e}");
             crate::tray::set_update_text(&app, "Update check failed");
         }
     }

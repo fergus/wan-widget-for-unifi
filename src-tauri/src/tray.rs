@@ -177,7 +177,7 @@ pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 let al = app.autolaunch();
                 let result = if want { al.enable() } else { al.disable() };
                 if let Err(e) = result {
-                    eprintln!("autostart change failed: {e}");
+                    log::warn!("autostart change failed: {e}");
                     let _ = autostart.set_checked(!want);
                 }
             }

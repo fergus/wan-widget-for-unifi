@@ -9,6 +9,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use widget_core::{ip, settings::Settings, unifi, usage};
 
+use crate::errors::{self, Peer};
 use crate::{config, pin};
 
 const MONTHLY_EVERY: Duration = Duration::from_secs(300);
@@ -93,11 +94,19 @@ async fn get_text(c: &reqwest::Client, url: &str, key: Option<&str>) -> Result<S
     if let Some(k) = key {
         req = req.header("X-API-KEY", k);
     }
-    let resp = req.send().await.map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status()));
+    // Only gateway requests carry the key.
+    let peer = if key.is_some() {
+        Peer::Gateway
+    } else {
+        Peer::Lookup
+    };
+    let resp = req.send().await.map_err(|e| errors::send(&e, peer))?;
+    let code = resp.status();
+    let body = resp.text().await.map_err(|e| errors::send(&e, peer))?;
+    if !code.is_success() {
+        return Err(errors::status(code, peer, &body));
     }
-    resp.text().await.map_err(|e| e.to_string())
+    Ok(body)
 }
 
 /// The gateway's IANA timezone from stat/sysinfo, or None if it does not report one.
@@ -107,7 +116,7 @@ async fn fetch_gateway_tz(
     key: &str,
 ) -> Result<Option<String>, String> {
     let body = get_text(c, &unifi::sysinfo_url(&s.gateway_url, &s.site), Some(key)).await?;
-    unifi::parse_sysinfo_timezone(&body).map_err(|e| e.to_string())
+    unifi::parse_sysinfo_timezone(&body).map_err(|e| errors::parse(&e))
 }
 
 async fn fetch_monthly(
@@ -127,12 +136,16 @@ async fn fetch_monthly(
         .body(body)
         .send()
         .await
-        .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status()));
+        .map_err(|e| errors::send(&e, Peer::Gateway))?;
+    let code = resp.status();
+    let text = resp
+        .text()
+        .await
+        .map_err(|e| errors::send(&e, Peer::Gateway))?;
+    if !code.is_success() {
+        return Err(errors::status(code, Peer::Gateway, &text));
     }
-    let text = resp.text().await.map_err(|e| e.to_string())?;
-    let buckets = unifi::parse_daily_report(&text).map_err(|e| e.to_string())?;
+    let buckets = unifi::parse_daily_report(&text).map_err(|e| errors::parse(&e))?;
     let t = usage::monthly_totals(&buckets, start);
     Ok(Monthly {
         rx: t.rx_bytes,
@@ -146,7 +159,7 @@ pub async fn test_connection(s: &Settings, key: &str, pin_path: &Path) -> Result
     s.validate().map_err(|errs| errs.join("; "))?;
     let c = client(s, pin_path, false)?;
     let body = get_text(&c, &unifi::health_url(&s.gateway_url, &s.site), Some(key)).await?;
-    let h = unifi::parse_health(&body).map_err(|e| e.to_string())?;
+    let h = unifi::parse_health(&body).map_err(|e| errors::parse(&e))?;
     // Daily buckets follow the gateway's zone, so say which one it is and flag an
     // override that does not match it.
     let tz_note = match (fetch_gateway_tz(&c, s, key).await.ok().flatten(), s.tz()) {
@@ -158,10 +171,10 @@ pub async fn test_connection(s: &Settings, key: &str, pin_path: &Path) -> Result
         (None, _) => String::new(),
     };
     Ok(format!(
-        "Connected{}: {} B/s down, {} B/s up{tz_note}",
-        h.isp_name.map(|n| format!(" ({n})")).unwrap_or_default(),
-        h.rx_bytes_per_s,
-        h.tx_bytes_per_s
+        "Connected{}: {} down, {} up{tz_note}",
+        h.isp_name.map(|n| format!(" to {n}")).unwrap_or_default(),
+        errors::rate(h.rx_bytes_per_s),
+        errors::rate(h.tx_bytes_per_s)
     ))
 }
 
@@ -209,7 +222,8 @@ pub async fn run(app: AppHandle) {
                     c
                 }
                 Err(e) => {
-                    let _ = app.emit("poll-status", format!("Gateway: {e}"));
+                    log::warn!("gateway client: {e}");
+                    let _ = app.emit("poll-status", e);
                     tokio::time::sleep(Duration::from_secs(5)).await;
                     continue;
                 }
@@ -219,9 +233,12 @@ pub async fn run(app: AppHandle) {
         let health_url = unifi::health_url(&s.gateway_url, &s.site);
         match get_text(&c, &health_url, Some(&key))
             .await
-            .and_then(|b| unifi::parse_health(&b).map_err(|e| e.to_string()))
+            .and_then(|b| unifi::parse_health(&b).map_err(|e| errors::parse(&e)))
         {
             Ok(h) => {
+                if failures > 0 {
+                    log::info!("gateway reachable again after {failures} failed polls");
+                }
                 failures = 0;
                 wan_ip = h.wan_ip;
                 let _ = app.emit("poll-status", "");
@@ -235,13 +252,11 @@ pub async fn run(app: AppHandle) {
             }
             Err(e) => {
                 failures = failures.saturating_add(1);
-                let msg = if pin::mismatch() {
-                    "Gateway certificate changed. Forget the pin in Settings if that is expected"
-                        .to_string()
-                } else {
-                    format!("Gateway: {e}")
-                };
-                let _ = app.emit("poll-status", msg);
+                // Log the start of an outage, not every retry.
+                if failures == 1 {
+                    log::warn!("live rates: {e}");
+                }
+                let _ = app.emit("poll-status", e);
             }
         }
 
@@ -250,7 +265,7 @@ pub async fn run(app: AppHandle) {
             if s.tz().is_none() && gateway_tz.is_none() {
                 match fetch_gateway_tz(&c, &s, &key).await {
                     Ok(z) => gateway_tz = z,
-                    Err(e) => eprintln!("gateway timezone: {e}"),
+                    Err(e) => log::warn!("gateway timezone: {e}"),
                 }
             }
             let system = iana_time_zone::get_timezone().ok();
@@ -268,7 +283,7 @@ pub async fn run(app: AppHandle) {
                 }
                 Err(e) => {
                     monthly_due = std::time::Instant::now() + MONTHLY_RETRY;
-                    eprintln!("monthly usage: {e}");
+                    log::warn!("monthly usage: {e}");
                 }
             }
         }
@@ -279,10 +294,10 @@ pub async fn run(app: AppHandle) {
             } else {
                 match get_text(&lookup, &s.ip_lookup_url, None).await {
                     Ok(b) => ip::parse_lookup(&b)
-                        .map_err(|e| eprintln!("ip lookup parse: {e}"))
+                        .map_err(|e| log::warn!("ip lookup parse: {e}"))
                         .ok(),
                     Err(e) => {
-                        eprintln!("ip lookup: {e}");
+                        log::warn!("ip lookup: {e}");
                         None
                     }
                 }
