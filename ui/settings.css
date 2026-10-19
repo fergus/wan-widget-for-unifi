@@ -1,35 +1,37 @@
+/* Colours follow the widget's design-system palette (style.css). Panel, line and the
+   error red are not in the design, so they are chosen to sit with it. */
 :root {
-  --bg: #f4f6f9;
+  --bg: #f8f9fb;
   --panel: #ffffff;
-  --fg: #1b2330;
-  --muted: #5d687a;
+  --fg: #151c27;
+  --muted: #4e596b;
   --line: #cfd6e0;
-  --accent: #1f6fd1;
+  --accent: #1d5fc7;
   --accent-fg: #ffffff;
   --bad: #b3261e;
-  --good: #0f7a4d;
+  --good: #00704a;
 }
 /* Dark tokens: when Windows is dark (unless forced light) or when forced dark. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #14181f;
-    --panel: #1c222c;
-    --fg: #e8ecf2;
-    --muted: #9aa5b5;
-    --line: #333c4a;
-    --accent: #5aa9ff;
+    --bg: #11151c;
+    --panel: #1a202a;
+    --fg: #e9edf3;
+    --muted: #9aa4b4;
+    --line: #2a3340;
+    --accent: #6cb4ff;
     --accent-fg: #0b1220;
     --bad: #ff8a80;
     --good: #3ddc97;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #14181f;
-  --panel: #1c222c;
-  --fg: #e8ecf2;
-  --muted: #9aa5b5;
-  --line: #333c4a;
-  --accent: #5aa9ff;
+  --bg: #11151c;
+  --panel: #1a202a;
+  --fg: #e9edf3;
+  --muted: #9aa4b4;
+  --line: #2a3340;
+  --accent: #6cb4ff;
   --accent-fg: #0b1220;
   --bad: #ff8a80;
   --good: #3ddc97;
