@@ -80,6 +80,20 @@ fn set_autostart(
     Ok(())
 }
 
+#[tauri::command]
+fn get_pinned(app: AppHandle) -> bool {
+    window_state::pinned(&app)
+}
+
+#[tauri::command]
+fn set_pinned(app: AppHandle, tray: tauri::State<tray::TrayState>, pinned: bool) {
+    window_state::set_pinned(&app, pinned);
+    if let Some(w) = app.get_webview_window("main") {
+        window_state::apply_pin(&w, pinned);
+    }
+    let _ = tray.pin.set_checked(pinned);
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::init(
@@ -95,6 +109,8 @@ fn main() {
             open_settings,
             get_autostart,
             set_autostart,
+            get_pinned,
+            set_pinned,
             latest_snapshot
         ])
         // Closing the settings window hides it so it can be reopened from the widget.

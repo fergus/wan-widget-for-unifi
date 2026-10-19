@@ -12,9 +12,10 @@ const ID_AUTOSTART: &str = "autostart";
 const ID_PIN: &str = "pin";
 const ID_QUIT: &str = "quit";
 
-/// Kept in managed state so the settings window can keep the tray checkbox in sync.
+/// Kept in managed state so the settings window can keep the tray checkboxes in sync.
 pub struct TrayState {
     pub autostart: CheckMenuItem<Wry>,
+    pub pin: CheckMenuItem<Wry>,
 }
 
 fn toggle_widget(app: &AppHandle) {
@@ -58,7 +59,7 @@ pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         &[&toggle, &click_through, &pin, &settings, &autostart, &sep, &quit],
     )?;
 
-    app.manage(TrayState { autostart: autostart.clone() });
+    app.manage(TrayState { autostart: autostart.clone(), pin: pin.clone() });
 
     let icon = app
         .default_window_icon()

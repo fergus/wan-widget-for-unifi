@@ -20,6 +20,8 @@ const stub = {
   test_connection: async () => "Connected (preview): 0 B/s down, 0 B/s up",
   get_autostart: async () => false,
   set_autostart: async () => null,
+  get_pinned: async () => false,
+  set_pinned: async () => null,
 };
 const invoke = tauri && tauri.core ? tauri.core.invoke : (cmd, args) => stub[cmd](args);
 
@@ -81,11 +83,20 @@ async function refreshAutostart() {
   $("startWithWindows").checked = autostartKnown;
 }
 
+// Pin state is also kept in window.json and mirrored in the tray menu.
+let pinnedKnown = false;
+
+async function refreshPinned() {
+  pinnedKnown = await invoke("get_pinned");
+  $("pinToDesktop").checked = pinnedKnown;
+}
+
 async function load() {
   const [settings, stored] = await Promise.all([
     invoke("get_settings"),
     refreshKeyHint(),
     refreshAutostart(),
+    refreshPinned(),
   ]);
   writeForm(toForm(settings));
   if (!stored) showResult("Enter your UniFi API key to start.", false);
@@ -110,6 +121,11 @@ async function onSave(e) {
     if (wantAutostart !== autostartKnown) {
       await invoke("set_autostart", { enabled: wantAutostart });
       autostartKnown = wantAutostart;
+    }
+    const wantPinned = $("pinToDesktop").checked;
+    if (wantPinned !== pinnedKnown) {
+      await invoke("set_pinned", { pinned: wantPinned });
+      pinnedKnown = wantPinned;
     }
     $("apiKey").value = "";
     await refreshKeyHint();
@@ -148,5 +164,6 @@ $("close").addEventListener("click", () => {
 window.addEventListener("focus", () => {
   // Do not clobber an unsaved change the user has made to the checkbox.
   if ($("startWithWindows").checked === autostartKnown) refreshAutostart().catch(() => {});
+  if ($("pinToDesktop").checked === pinnedKnown) refreshPinned().catch(() => {});
 });
 load().catch((err) => showErrors(errorList(err)));
