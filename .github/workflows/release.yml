@@ -1,7 +1,7 @@
 name: Release
 
 # Push a tag like v0.1.0 to build the installer and open a draft release for it.
-# The tag must match "version" in src-tauri/tauri.conf.json.
+# The tag must match the version in src-tauri/Cargo.toml.
 # Needs the TAURI_SIGNING_PRIVATE_KEY repository secret: the updater key that signs
 # the update, matching the pubkey in tauri.conf.json.
 on:
@@ -20,9 +20,10 @@ jobs:
       - name: Check the tag matches the app version
         shell: pwsh
         run: |
-          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $version = (Select-String -Path src-tauri/Cargo.toml -Pattern '^version = "(.+)"' |
+            Select-Object -First 1).Matches.Groups[1].Value
           if ("v$version" -ne "${{ github.ref_name }}") {
-            Write-Error "Tag ${{ github.ref_name }} does not match tauri.conf.json version $version"
+            Write-Error "Tag ${{ github.ref_name }} does not match src-tauri/Cargo.toml version $version"
             exit 1
           }
 

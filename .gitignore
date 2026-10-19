@@ -4,3 +4,6 @@ src-tauri/gen/
 src-tauri/target/
 .env
 *.key
+
+# Local Claude Code config (UI preview launcher)
+.claude/

@@ -27,6 +27,10 @@ pub async fn check(app: &AppHandle) -> Result<Option<String>, String> {
         .await
         .map_err(|e| e.to_string())?;
     let version = update.as_ref().map(|u| u.version.clone());
+    match &version {
+        Some(v) => log::info!("update check: {v} is available"),
+        None => log::info!("update check: up to date"),
+    }
     if let Ok(mut g) = app.state::<Pending>().0.lock() {
         *g = update;
     }

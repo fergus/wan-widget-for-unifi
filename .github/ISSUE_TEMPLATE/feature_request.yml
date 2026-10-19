@@ -1,0 +1,17 @@
+name: Feature request
+description: Suggest something the widget could show or do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like
+      description: What you'd want to see or do, and why it would help.
+    validations:
+      required: true
+  - type: input
+    id: console
+    attributes:
+      label: UniFi console and Network app version
+      description: Optional, but useful when the idea needs data from the gateway.
+      placeholder: "UCG Ultra, Network 10.6"

@@ -1,0 +1,44 @@
+name: Bug report
+description: Something doesn't work or shows the wrong numbers
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead. A screenshot helps (hide your public IP).
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Widget version
+      description: Settings > Updates shows it.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: console
+    attributes:
+      label: UniFi console
+      placeholder: "UCG Ultra, UDM Pro, Cloud Key Gen2+, self-hosted..."
+    validations:
+      required: true
+  - type: input
+    id: network
+    attributes:
+      label: UniFi Network app version
+      placeholder: "10.6.x"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and display scaling
+      placeholder: "Windows 11 24H2, 150%"
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Settings > Open log folder, then paste the end of the log file. It never contains your API key, but check it for anything you'd rather not share.
+      render: text
