@@ -55,16 +55,15 @@ The UI never calls the gateway; the key stays in the Rust process.
 | M0 | Probe the API; confirm endpoints and fields | Done |
 | M1 | `widget-core` with fixture-driven tests | Done (31 tests) |
 | M1b | UI graph helpers, formatters and settings-form logic with tests | Done (16 tests) |
-| M2 | Tauri shell, poller, config, settings window (gateway URL, API key, site, poll interval, billing day, timezone, lookup, self-signed certs, test connection) | Written, **uncompiled and not run in WebView2** |
-| M3 | Tray icon (show/hide, click-through, settings, autostart, quit) and autostart (HKCU Run key, off by default) | Written, **uncompiled and not run** |
-| M3b | Remembered window position | Not started |
+| M2 | Tauri shell, poller, config, settings window (gateway URL, API key, site, poll interval, billing day, timezone, lookup, self-signed certs, test connection) | Done: compiles, runs in WebView2 on Windows 11; poller, live graph, save and Test connection verified (2026-10-19) |
+| M3 | Tray icon (show/hide, click-through, settings, autostart, quit) and autostart (HKCU Run key, off by default) | Done: tray items and autostart in both tray and settings verified against HKCU Run (2026-10-19) |
+| M3b | Remembered window position | Done: saved to window.json, restored before the window is shown |
 | M4 | NSIS installer build on Windows, icons | Not started |
 | M5 | Hardening: certificate pinning, backoff on gateway errors, stale-data indicator | Not started |
 
 ## Risks and open items
 
-- **Rust shell unverified.** `src-tauri` has not been compiled (no WebKit/WebView2 toolchain here). Expect small fixes on first Windows build.
-- **Settings window unverified.** Pure form logic is tested; the page, the Tauri commands and the window show/hide behaviour have not been run.
+- **Icons are a placeholder.** `src-tauri/icons/` was generated from a generated placeholder PNG and is not committed. Replace the 1024px source and rerun `cargo tauri icon` before M4.
 - **Polling cost.** 2 s polling of `stat/health` on the gateway is assumed cheap; measure CPU on the UCG Ultra during M2.
 - **Timezone mismatch** between the setting and the controller shifts the cycle boundary by hours. Consider reading the site timezone from the controller later.
 - **Monthly figure lags** if the controller updates the current-day bucket only hourly. Verify during M2 and note in the UI if so.
