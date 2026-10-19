@@ -9,6 +9,7 @@ const ID_TOGGLE: &str = "toggle";
 const ID_CLICK_THROUGH: &str = "click_through";
 const ID_SETTINGS: &str = "settings";
 const ID_AUTOSTART: &str = "autostart";
+const ID_PIN: &str = "pin";
 const ID_QUIT: &str = "quit";
 
 /// Kept in managed state so the settings window can keep the tray checkbox in sync.
@@ -42,9 +43,20 @@ pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         autostart_on,
         None::<&str>,
     )?;
+    let pin = CheckMenuItem::with_id(
+        app,
+        ID_PIN,
+        "Pin to desktop",
+        true,
+        crate::window_state::pinned(app),
+        None::<&str>,
+    )?;
     let quit = MenuItem::with_id(app, ID_QUIT, "Quit", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&toggle, &click_through, &settings, &autostart, &sep, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[&toggle, &click_through, &pin, &settings, &autostart, &sep, &quit],
+    )?;
 
     app.manage(TrayState { autostart: autostart.clone() });
 
@@ -63,6 +75,13 @@ pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             ID_CLICK_THROUGH => {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.set_ignore_cursor_events(click_through.is_checked().unwrap_or(false));
+                }
+            }
+            ID_PIN => {
+                let want = pin.is_checked().unwrap_or(false);
+                crate::window_state::set_pinned(app, want);
+                if let Some(w) = app.get_webview_window("main") {
+                    crate::window_state::apply_pin(&w, want);
                 }
             }
             ID_SETTINGS => {
