@@ -58,12 +58,14 @@ The UI never calls the gateway; the key stays in the Rust process.
 | M2 | Tauri shell, poller, config, settings window (gateway URL, API key, site, poll interval, billing day, timezone, lookup, self-signed certs, test connection) | Done: compiles, runs in WebView2 on Windows 11; poller, live graph, save and Test connection verified (2026-10-19) |
 | M3 | Tray icon (show/hide, click-through, settings, autostart, quit) and autostart (HKCU Run key, off by default) | Done: tray items and autostart in both tray and settings verified against HKCU Run (2026-10-19) |
 | M3b | Remembered window position | Done: saved to window.json, restored before the window is shown |
-| M4 | NSIS installer build on Windows, icons | Not started |
-| M5 | Hardening: certificate pinning, backoff on gateway errors, stale-data indicator | Not started |
+| M4 | NSIS installer build on Windows, icons | Done: design-system icon set; `cargo tauri build` produces an NSIS installer (about 3 MB); installed per user to `%LOCALAPPDATA%\UniFi Widget` |
+| M5 | Hardening: certificate pinning, backoff on gateway errors, stale-data indicator | Done: trust-on-first-use pin of the gateway certificate (`gateway-pin.json`), with a warning and refusal on change and a Forget button; health backoff up to 60 s; monthly retry after 60 s; "No recent data" after 15 s |
+
+Features added after the first Windows run: pin to desktop (tray and Settings), a theme setting (System, Dark, Light), tooltips for monthly total and IP, smoothed graph, design-system palette, and a taskbar-aware tray icon.
 
 ## Risks and open items
 
-- **Icons are a placeholder.** `src-tauri/icons/` was generated from a generated placeholder PNG and is not committed. Replace the 1024px source and rerun `cargo tauri icon` before M4.
+- **Certificate pin is trust on first use.** The first connection decides what is trusted. If the gateway's certificate is regenerated, the widget refuses it until you press Forget pinned certificate in Settings.
 - **Polling cost.** 2 s polling of `stat/health` on the gateway is assumed cheap; measure CPU on the UCG Ultra during M2.
 - **Timezone mismatch** between the setting and the controller shifts the cycle boundary by hours. Consider reading the site timezone from the controller later.
 - **Monthly figure lags** if the controller updates the current-day bucket only hourly. Verify during M2 and note in the UI if so.
