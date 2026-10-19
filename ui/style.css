@@ -43,3 +43,5 @@ footer .label { opacity: 0.8; }
 footer span:not(.label) { color: var(--fg); }
 .badge { margin-left: 4px; padding: 0 5px; border-radius: 6px; background: var(--warn); color: #111; font-size: 10px; font-weight: 700; }
 .status { margin-top: 6px; color: var(--warn); font-size: 12px; }
+/* Dim the live values when no rate has arrived for a while (see STALE_MS in main.js). */
+.card.stale canvas, .card.stale .rate { opacity: 0.4; }

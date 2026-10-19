@@ -44,7 +44,13 @@ function draw() {
   }
 }
 
+// Rates arrive every poll interval (2 s); with backoff they can stretch to 60 s.
+// Past STALE_MS with no rates, the widget dims and says so.
+const STALE_MS = 15_000;
+let lastRatesAt = 0;
+
 function onRates({ rx, tx }) {
+  lastRatesAt = Date.now();
   samples = pushSample(samples, { rx, tx }, MAX_POINTS);
   $("rx").textContent = "\u2193 " + formatRate(rx);
   $("tx").textContent = "\u2191 " + formatRate(tx);
@@ -100,6 +106,12 @@ if (tauri && tauri.event) {
     });
   }, 500);
 }
+
+setInterval(() => {
+  const stale = Date.now() - lastRatesAt > STALE_MS;
+  document.querySelector(".card").classList.toggle("stale", stale);
+  $("stale").hidden = !stale;
+}, 1000);
 
 // Keep the window exactly as tall as the card, so no transparent strip shows below it.
 if (tauri && tauri.window && typeof ResizeObserver === "function") {

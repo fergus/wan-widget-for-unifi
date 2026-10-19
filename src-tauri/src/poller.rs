@@ -11,7 +11,15 @@ use widget_core::{ip, settings::Settings, unifi, usage};
 use crate::config;
 
 const MONTHLY_EVERY: Duration = Duration::from_secs(300);
+const MONTHLY_RETRY: Duration = Duration::from_secs(60);
 const IP_EVERY: Duration = Duration::from_secs(300);
+/// Longest wait between health polls while the gateway keeps failing.
+const MAX_BACKOFF_MS: u64 = 60_000;
+
+/// Poll interval after `failures` consecutive gateway errors: doubles each time, capped.
+fn backoff_ms(base_ms: u64, failures: u32) -> u64 {
+    base_ms.saturating_mul(1u64 << failures.min(6)).min(MAX_BACKOFF_MS)
+}
 
 #[derive(Serialize, Clone)]
 struct Rates {
@@ -114,7 +122,8 @@ pub async fn test_connection(s: &Settings, key: &str) -> Result<String, String> 
 pub async fn run(app: AppHandle) {
     let latest: Arc<Latest> = (*app.state::<Arc<Latest>>()).clone();
     let mut last_theme: Option<String> = None;
-    let mut last_monthly: Option<std::time::Instant> = None;
+    let mut failures: u32 = 0;
+    let mut monthly_due = std::time::Instant::now();
     let mut last_ip: Option<std::time::Instant> = None;
     let mut wan_ip: Option<std::net::IpAddr> = None;
 
@@ -141,25 +150,31 @@ pub async fn run(app: AppHandle) {
             unifi::parse_health(&b).map_err(|e| e.to_string())
         }) {
             Ok(h) => {
+                failures = 0;
                 wan_ip = h.wan_ip;
                 let _ = app.emit("poll-status", "");
                 let _ = app.emit("wan-rates", Rates { rx: h.rx_bytes_per_s, tx: h.tx_bytes_per_s });
             }
             Err(e) => {
+                failures = failures.saturating_add(1);
                 let _ = app.emit("poll-status", format!("Gateway: {e}"));
             }
         }
 
-        if last_monthly.map_or(true, |t| t.elapsed() >= MONTHLY_EVERY) {
+        let now = std::time::Instant::now();
+        if now >= monthly_due {
             match fetch_monthly(&c, &s, &key).await {
                 Ok(m) => {
-                    last_monthly = Some(std::time::Instant::now());
+                    monthly_due = std::time::Instant::now() + MONTHLY_EVERY;
                     if let Ok(mut g) = latest.monthly.lock() {
                         *g = Some(m.clone());
                     }
                     let _ = app.emit("monthly-usage", m);
                 }
-                Err(e) => eprintln!("monthly usage: {e}"),
+                Err(e) => {
+                    monthly_due = std::time::Instant::now() + MONTHLY_RETRY;
+                    eprintln!("monthly usage: {e}");
+                }
             }
         }
 
@@ -190,6 +205,20 @@ pub async fn run(app: AppHandle) {
             let _ = app.emit("ip-info", info);
         }
 
-        tokio::time::sleep(Duration::from_millis(s.poll_interval_ms)).await;
+        let wait_ms = if failures == 0 { s.poll_interval_ms } else { backoff_ms(s.poll_interval_ms, failures) };
+        tokio::time::sleep(Duration::from_millis(wait_ms)).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::backoff_ms;
+
+    #[test]
+    fn backoff_doubles_then_caps_at_a_minute() {
+        assert_eq!(backoff_ms(2000, 1), 4000);
+        assert_eq!(backoff_ms(2000, 2), 8000);
+        assert_eq!(backoff_ms(2000, 5), 60_000);
+        assert_eq!(backoff_ms(2000, u32::MAX), 60_000);
     }
 }
