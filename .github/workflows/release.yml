@@ -1,0 +1,47 @@
+name: Release
+
+# Push a tag like v0.1.0 to build the installer and open a draft release for it.
+# The tag must match "version" in src-tauri/tauri.conf.json.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the tag matches the app version
+        shell: pwsh
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if ("v$version" -ne "${{ github.ref_name }}") {
+            Write-Error "Tag ${{ github.ref_name }} does not match tauri.conf.json version $version"
+            exit 1
+          }
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - uses: tauri-apps/tauri-action@action-v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: npx --yes @tauri-apps/cli@2.12.3
+          tagName: ${{ github.ref_name }}
+          releaseName: WAN Widget for UniFi ${{ github.ref_name }}
+          releaseBody: |
+            Download the `-setup.exe` below and run it. It installs for your user only, so no admin rights are needed.
+
+            The installer is not code-signed yet, so Windows SmartScreen may warn about it. Choose **More info**, then **Run anyway**.
+          releaseDraft: true
+          generateReleaseNotes: true

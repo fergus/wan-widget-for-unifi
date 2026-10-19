@@ -81,6 +81,10 @@ cargo tauri dev                        # run from source
 cargo tauri build                      # NSIS installer in target\release\bundle\nsis
 ```
 
+To release, set `version` in `src-tauri/tauri.conf.json`, then push a matching tag
+(for example `v0.1.0`). The Release workflow builds the installer and opens a draft
+GitHub release with it attached.
+
 Design notes, API findings and open risks are in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## License
