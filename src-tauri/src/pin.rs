@@ -20,6 +20,13 @@ use tauri::{AppHandle, Manager};
 
 /// Set when the last handshake presented a certificate other than the pinned one.
 static MISMATCH: AtomicBool = AtomicBool::new(false);
+/// Set by forget(), so the poller retries now instead of waiting out its backoff.
+static RESET: AtomicBool = AtomicBool::new(false);
+
+/// True once after forget(). The poller uses it to cut a backoff wait short.
+pub fn take_reset() -> bool {
+    RESET.swap(false, Ordering::Relaxed)
+}
 
 #[derive(Serialize, Deserialize)]
 struct Stored {
@@ -58,6 +65,7 @@ pub fn forget(app: &AppHandle) {
         let _ = fs::remove_file(p);
     }
     MISMATCH.store(false, Ordering::Relaxed);
+    RESET.store(true, Ordering::Relaxed);
 }
 
 #[derive(Debug)]

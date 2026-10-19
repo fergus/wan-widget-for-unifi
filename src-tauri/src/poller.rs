@@ -230,7 +230,15 @@ pub async fn run(app: AppHandle) {
         }
 
         let wait_ms = if failures == 0 { s.poll_interval_ms } else { backoff_ms(s.poll_interval_ms, failures) };
-        tokio::time::sleep(Duration::from_millis(wait_ms)).await;
+        // Sleep in short steps so a pin reset (Forget in Settings) retries straight away.
+        let until = std::time::Instant::now() + Duration::from_millis(wait_ms);
+        while std::time::Instant::now() < until {
+            if pin::take_reset() {
+                failures = 0;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
     }
 }
 
