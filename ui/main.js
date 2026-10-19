@@ -48,6 +48,7 @@ function onMonthly({ rx, tx }) {
 
 function onIp({ external, wan, cgnat }) {
   $("ip").textContent = external || wan || "-";
+  $("ip").title = [external && "Public IP " + external, wan && "Gateway WAN " + wan].filter(Boolean).join("  /  ");
   $("cgnat").hidden = !cgnat;
   $("cgnat").title = wan ? "Gateway WAN address is " + wan : "";
 }
