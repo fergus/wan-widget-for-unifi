@@ -1,4 +1,5 @@
 import { pushSample, yMax, formatRate, formatBytes } from "./series.js";
+import { applyTheme } from "./theme.js";
 
 const MAX_POINTS = 150; // 5 minutes at 2s polling
 const $ = (id) => document.getElementById(id);
@@ -79,6 +80,8 @@ if (tauri && tauri.event) {
   tauri.event.listen("monthly-usage", (e) => onMonthly(e.payload));
   tauri.event.listen("ip-info", (e) => onIp(e.payload));
   tauri.event.listen("poll-status", (e) => onStatus(e.payload));
+  tauri.event.listen("theme", (e) => applyTheme(e.payload));
+  tauri.core.invoke("get_settings").then((s) => applyTheme(s.theme));
   // Monthly and IP are only emitted every 5 minutes, so also fetch the latest values.
   tauri.core.invoke("latest_snapshot").then(({ monthly, ip }) => {
     if (monthly) onMonthly(monthly);

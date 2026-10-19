@@ -9,8 +9,9 @@
   --bad: #b3261e;
   --good: #0f7a4d;
 }
+/* Dark tokens: when Windows is dark (unless forced light) or when forced dark. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #14181f;
     --panel: #1c222c;
     --fg: #e8ecf2;
@@ -21,6 +22,17 @@
     --bad: #ff8a80;
     --good: #3ddc97;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #14181f;
+  --panel: #1c222c;
+  --fg: #e8ecf2;
+  --muted: #9aa5b5;
+  --line: #333c4a;
+  --accent: #5aa9ff;
+  --accent-fg: #0b1220;
+  --bad: #ff8a80;
+  --good: #3ddc97;
 }
 html, body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 "Segoe UI", system-ui, sans-serif; }
 form { box-sizing: border-box; max-width: 460px; margin: 0 auto; padding: 16px 20px 20px; }

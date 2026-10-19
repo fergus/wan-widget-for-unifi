@@ -10,6 +10,7 @@ const backend = {
   timezone: "Australia/Sydney",
   ip_lookup_url: "https://api.ipify.org",
   accept_invalid_certs: true,
+  theme: "system",
 };
 
 test("toForm shows the poll interval in seconds and enables lookup when a URL is set", () => {

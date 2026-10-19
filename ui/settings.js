@@ -1,4 +1,5 @@
 import { toForm, fromForm, errorList } from "./settings-form.js";
+import { applyTheme } from "./theme.js";
 
 const $ = (id) => document.getElementById(id);
 const tauri = window.__TAURI__;
@@ -14,6 +15,7 @@ const stub = {
     timezone: "Australia/Sydney",
     ip_lookup_url: "https://api.ipify.org",
     accept_invalid_certs: true,
+    theme: "system",
   }),
   set_api_key: async () => null,
   save_settings: async () => null,
@@ -25,7 +27,7 @@ const stub = {
 };
 const invoke = tauri && tauri.core ? tauri.core.invoke : (cmd, args) => stub[cmd](args);
 
-const FIELDS = ["gatewayUrl", "site", "pollSeconds", "billingDay", "timezone", "ipLookupUrl"];
+const FIELDS = ["gatewayUrl", "site", "pollSeconds", "billingDay", "timezone", "ipLookupUrl", "theme"];
 const CHECKS = ["lookupEnabled", "acceptInvalidCerts"];
 
 function readForm() {
@@ -99,6 +101,7 @@ async function load() {
     refreshPinned(),
   ]);
   writeForm(toForm(settings));
+  applyTheme(settings.theme);
   if (!stored) showResult("Enter your UniFi API key to start.", false);
   if (typeof Intl.supportedValuesOf === "function") {
     $("zones").replaceChildren(
@@ -157,6 +160,8 @@ async function onTest() {
 $("form").addEventListener("submit", onSave);
 $("test").addEventListener("click", onTest);
 $("lookupEnabled").addEventListener("change", syncLookup);
+// Preview the chosen theme straight away; the value is saved with the other settings.
+$("theme").addEventListener("change", () => applyTheme($("theme").value));
 $("close").addEventListener("click", () => {
   if (tauri && tauri.window) tauri.window.getCurrentWindow().hide();
   else window.close();

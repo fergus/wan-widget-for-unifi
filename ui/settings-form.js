@@ -13,6 +13,7 @@ export function toForm(s) {
     lookupEnabled: s.ip_lookup_url !== "",
     ipLookupUrl: s.ip_lookup_url,
     acceptInvalidCerts: s.accept_invalid_certs,
+    theme: s.theme,
   };
 }
 
@@ -44,6 +45,7 @@ export function fromForm(f) {
       timezone: String(f.timezone).trim(),
       ip_lookup_url: f.lookupEnabled ? url : "",
       accept_invalid_certs: Boolean(f.acceptInvalidCerts),
+      theme: String(f.theme),
     },
     errors: [],
   };

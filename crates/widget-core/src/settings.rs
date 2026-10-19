@@ -16,6 +16,8 @@ pub struct Settings {
     pub ip_lookup_url: String,
     /// UniFi gateways ship self-signed certificates.
     pub accept_invalid_certs: bool,
+    /// "system" (follow Windows), "dark" or "light".
+    pub theme: String,
 }
 
 impl Default for Settings {
@@ -28,6 +30,7 @@ impl Default for Settings {
             timezone: "Australia/Sydney".into(),
             ip_lookup_url: "https://api.ipify.org".into(),
             accept_invalid_certs: true,
+            theme: "system".into(),
         }
     }
 }
@@ -57,6 +60,9 @@ impl Settings {
         }
         if !self.ip_lookup_url.is_empty() && !self.ip_lookup_url.starts_with("https://") {
             errs.push("ip_lookup_url must be empty or start with https://".into());
+        }
+        if !["system", "dark", "light"].contains(&self.theme.as_str()) {
+            errs.push("theme must be system, dark or light".into());
         }
         if errs.is_empty() { Ok(()) } else { Err(errs) }
     }
@@ -94,6 +100,16 @@ mod tests {
             ..Settings::default()
         };
         assert_eq!(s.validate().unwrap_err().len(), 4);
+    }
+
+    #[test]
+    fn theme_must_be_a_known_value() {
+        for t in ["system", "dark", "light"] {
+            let s = Settings { theme: t.into(), ..Settings::default() };
+            assert_eq!(s.validate(), Ok(()));
+        }
+        let s = Settings { theme: "neon".into(), ..Settings::default() };
+        assert!(s.validate().is_err());
     }
 
     #[test]

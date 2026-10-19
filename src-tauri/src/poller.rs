@@ -113,6 +113,7 @@ pub async fn test_connection(s: &Settings, key: &str) -> Result<String, String> 
 
 pub async fn run(app: AppHandle) {
     let latest: Arc<Latest> = (*app.state::<Arc<Latest>>()).clone();
+    let mut last_theme: Option<String> = None;
     let mut last_monthly: Option<std::time::Instant> = None;
     let mut last_ip: Option<std::time::Instant> = None;
     let mut wan_ip: Option<std::net::IpAddr> = None;
@@ -120,6 +121,10 @@ pub async fn run(app: AppHandle) {
     loop {
         // Re-read each cycle so settings and key changes apply without a restart.
         let s = config::load_settings(&app);
+        if last_theme.as_deref() != Some(s.theme.as_str()) {
+            let _ = app.emit("theme", s.theme.clone());
+            last_theme = Some(s.theme.clone());
+        }
         let Some(key) = config::load_api_key() else {
             let _ = app.emit("poll-status", "No API key set");
             tokio::time::sleep(Duration::from_secs(2)).await;
