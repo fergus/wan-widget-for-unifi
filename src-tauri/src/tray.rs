@@ -1,9 +1,14 @@
 //! System tray: show/hide, click-through, settings, autostart, quit.
 
+use std::sync::Mutex;
+
+use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Wry};
 use tauri_plugin_autostart::ManagerExt;
+use winreg::enums::HKEY_CURRENT_USER;
+use winreg::RegKey;
 
 const ID_TOGGLE: &str = "toggle";
 const ID_CLICK_THROUGH: &str = "click_through";
@@ -25,6 +30,44 @@ fn toggle_widget(app: &AppHandle) {
     } else {
         let _ = w.show();
         let _ = w.set_focus();
+    }
+}
+
+/// Windows shows the taskbar in light mode when SystemUsesLightTheme is 1.
+fn taskbar_is_light() -> bool {
+    RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize")
+        .and_then(|k| k.get_value::<u32, _>("SystemUsesLightTheme"))
+        .map(|v| v == 1)
+        .unwrap_or(false)
+}
+
+/// Last (light taskbar, 24 px) pair applied, so the icon is only swapped on change.
+static APPLIED: Mutex<Option<(bool, bool)>> = Mutex::new(None);
+
+/// Picks the tray icon for the taskbar theme and display scale. Called from the poller
+/// loop, so a theme change is picked up within a couple of seconds.
+pub fn sync_icon(app: &AppHandle) {
+    let light = taskbar_is_light();
+    let large = app
+        .get_webview_window("main")
+        .and_then(|w| w.scale_factor().ok())
+        .map_or(false, |s| s > 1.0);
+    let want = (light, large);
+    let Ok(mut applied) = APPLIED.lock() else { return };
+    if *applied == Some(want) {
+        return;
+    }
+    let bytes: &[u8] = match want {
+        (true, false) => include_bytes!("../icons/tray/tray-light-taskbar-16.png"),
+        (true, true) => include_bytes!("../icons/tray/tray-light-taskbar-24.png"),
+        (false, false) => include_bytes!("../icons/tray/tray-dark-taskbar-16.png"),
+        (false, true) => include_bytes!("../icons/tray/tray-dark-taskbar-24.png"),
+    };
+    if let (Some(tray), Ok(icon)) = (app.tray_by_id("main"), Image::from_bytes(bytes)) {
+        if tray.set_icon(Some(icon)).is_ok() {
+            *applied = Some(want);
+        }
     }
 }
 

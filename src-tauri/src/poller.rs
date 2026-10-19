@@ -125,6 +125,7 @@ pub async fn run(app: AppHandle) {
             let _ = app.emit("theme", s.theme.clone());
             last_theme = Some(s.theme.clone());
         }
+        crate::tray::sync_icon(&app);
         let Some(key) = config::load_api_key() else {
             let _ = app.emit("poll-status", "No API key set");
             tokio::time::sleep(Duration::from_secs(2)).await;
