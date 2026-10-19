@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "UniFi Widget",
+  "productName": "WAN Widget for UniFi",
   "version": "0.1.0",
-  "identifier": "local.unifi-widget",
+  "identifier": "io.github.fergus.unifi-widget",
   "build": {
     "frontendDist": "../ui"
   },
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "UniFi Widget",
+        "title": "WAN Widget for UniFi",
         "width": 360,
         "height": 230,
         "decorations": false,
@@ -23,7 +23,7 @@
       },
       {
         "label": "settings",
-        "title": "UniFi Widget Settings",
+        "title": "WAN Widget for UniFi Settings",
         "url": "settings.html",
         "width": 460,
         "height": 640,

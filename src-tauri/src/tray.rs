@@ -111,7 +111,7 @@ pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     TrayIconBuilder::with_id("main")
         .icon(icon)
-        .tooltip("UniFi Widget")
+        .tooltip("WAN Widget for UniFi")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id.as_ref() {

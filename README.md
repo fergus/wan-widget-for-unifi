@@ -1,46 +1,45 @@
-# UniFi Widget
+# WAN Widget for UniFi
 
-Windows 11 desktop widget: live WAN upload/download graph, monthly data usage and
-external IP, fed by a UniFi gateway's local API. See [docs/PLAN.md](docs/PLAN.md).
+A small Windows 11 desktop widget that shows, from your UniFi gateway's local API:
 
-## Layout
+- a live graph of WAN download and upload throughput
+- data used so far in your billing month
+- your public IP address, with a CGNAT badge when the gateway's WAN address differs
 
-| Path | What | Builds on |
-|---|---|---|
-| `crates/widget-core` | Parsing, billing-cycle maths, CGNAT detection, settings validation (no I/O) | Linux + Windows |
-| `ui/` | Static HTML/JS front end; opens in a plain browser with synthetic data | Anywhere (Node 22 for tests) |
-| `src-tauri/` | Tauri 2 shell: window, poller, settings file, Credential Manager | Windows only (unverified) |
+It sits on top of other windows or pins to the desktop, lives in the tray, and can
+start with Windows.
 
-## Tests
+> Not affiliated with or endorsed by Ubiquiti Inc. UniFi is a trademark of Ubiquiti Inc.
 
-```
-cargo test            # widget-core
-cd ui && npm test     # graph helpers and formatters
-```
+## Requirements
 
-## Building the Windows app
+- Windows 11 (WebView2 is built in)
+- A UniFi gateway running UniFi OS with the Network application. Tested on a UCG Ultra
+  with Network 10.6. Reports from other consoles and versions are welcome.
+- A UniFi API key
 
-Built and run on Windows 11 with Rust, Node and WebView2 (Visual Studio C++ build tools
-for the MSVC linker):
+## Setup
 
-```
-cargo install tauri-cli --version "^2"
-cd src-tauri
-cargo tauri icon path\to\1024px.png    # generates icons/ (required by the bundler)
-cargo tauri dev                        # run from source
-cargo tauri build                      # NSIS installer in target\release\bundle\nsis
-```
+1. In the UniFi Network app, open **Settings > Control Plane > Integrations** and
+   create an API key.
+2. Start the widget. On first run it opens Settings: enter the gateway address
+   (default `https://192.168.1.1`), paste the API key, and press **Test connection**.
+3. Set your billing day and timezone so the monthly figure resets when your ISP's
+   month does. The timezone should match the one set on the controller.
 
-The tray icon uses the app icon and the light- and dark-taskbar PNGs in `icons/tray/`.
-The bundler needs `icons/icon.ico`, so `cargo tauri icon` must have been run.
+The gateway uses a self-signed certificate. The widget trusts the certificate it sees
+on the first connection and refuses a different one later, until you press
+**Forget pinned certificate** in Settings.
 
-The installer installs per user to `%LOCALAPPDATA%\UniFi Widget`. Autostart (Start with
-Windows) writes an HKCU Run entry that points at the exe it was enabled from, so turn it
-off and on again after moving the app.
+### Privacy
 
-## Configuration
+The widget talks to your gateway and, for the public IP, to `https://api.ipify.org`
+every 5 minutes. You can change the lookup address or turn it off in Settings. Nothing
+else leaves your network.
 
-Settings live in `%APPDATA%\local.unifi-widget\settings.json` (see
+## Configuration files
+
+Settings live in `%APPDATA%\io.github.fergus.unifi-widget\settings.json` (see
 `crates/widget-core/src/settings.rs` for fields and defaults). The API key is stored
 in Windows Credential Manager (service `unifi-widget`), never in that file.
 
@@ -48,8 +47,36 @@ Other files in the same folder, all written by the app:
 
 - `window.json`: window position and the Pin to desktop choice.
 - `gateway-pin.json`: SHA-256 of the gateway's certificate, pinned on first connection.
-  If the certificate changes, the widget refuses it until you press Forget pinned
-  certificate in Settings.
+
+The installer installs per user to `%LOCALAPPDATA%\WAN Widget for UniFi`. Start with
+Windows writes an HKCU Run entry that points at the exe it was enabled from, so turn it
+off and on again after moving the app.
+
+## Building from source
+
+| Path | What | Builds on |
+|---|---|---|
+| `crates/widget-core` | Parsing, billing-cycle maths, CGNAT detection, settings validation (no I/O) | Linux and Windows |
+| `ui/` | Static HTML/JS front end; opens in a plain browser with synthetic data | Anywhere (Node 22 for tests) |
+| `src-tauri/` | Tauri 2 shell: window, poller, tray, settings file, Credential Manager | Windows |
+
+Tests:
+
+```
+cargo test            # widget-core
+cd ui && npm test     # graph helpers and formatters
+```
+
+The Windows app needs Rust, Node, WebView2 and the Visual Studio C++ build tools:
+
+```
+cargo install tauri-cli --version "^2"
+cd src-tauri
+cargo tauri dev                        # run from source
+cargo tauri build                      # NSIS installer in target\release\bundle\nsis
+```
+
+Design notes, API findings and open risks are in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## License
 
