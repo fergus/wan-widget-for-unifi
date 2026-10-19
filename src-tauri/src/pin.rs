@@ -221,6 +221,54 @@ mod tests {
         }
     }
 
+    // Regression guard for hashing-library upgrades: a changed fingerprint would make
+    // every installed copy refuse its gateway as "certificate changed".
+
+    /// Stand-in for a certificate's DER bytes.
+    fn sample_der() -> Vec<u8> {
+        (0..=255u8).cycle().take(1024).collect()
+    }
+
+    #[test]
+    fn fingerprint_matches_published_sha256_vectors() {
+        // FIPS 180-2 test vectors, lowercase hex, no separators.
+        assert_eq!(
+            fingerprint(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            fingerprint(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        // Computed independently with Python's hashlib.
+        assert_eq!(
+            fingerprint(&sample_der()),
+            "785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9"
+        );
+    }
+
+    #[test]
+    fn pins_saved_by_earlier_versions_still_match() {
+        // gateway-pin.json exactly as 0.1.x writes it.
+        let saved = r#"{
+  "hosts": {
+    "192.168.1.1": "785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9"
+  }
+}"#;
+        let stored: Stored = serde_json::from_str(saved).unwrap();
+        let fp = fingerprint(&sample_der());
+        for record in [true, false] {
+            assert_eq!(
+                check(&stored, "192.168.1.1", &fp, record),
+                (Verdict::Trusted, None)
+            );
+        }
+        // And what this version writes reads back the same way.
+        let (_, written) = check(&Stored::default(), "192.168.1.1", &fp, true);
+        let json = serde_json::to_string_pretty(&written.unwrap()).unwrap();
+        assert_eq!(json, saved);
+    }
+
     #[test]
     fn first_host_is_pinned_when_recording() {
         let (v, save) = check(&Stored::default(), "192.168.1.1", "aa", true);
