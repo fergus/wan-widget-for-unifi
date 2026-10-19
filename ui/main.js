@@ -28,8 +28,17 @@ function draw() {
     if (samples.length < 2) break;
     ctx.strokeStyle = css(color);
     ctx.lineWidth = 1.5;
+    // Curves through the midpoints between samples: smoother, and never overshoots a peak.
+    const pts = samples.map((s, i) => [x(i), y(s[key])]);
     ctx.beginPath();
-    samples.forEach((s, i) => (i ? ctx.lineTo(x(i), y(s[key])) : ctx.moveTo(x(i), y(s[key]))));
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length - 1; i++) {
+      const [cx, cy] = pts[i];
+      const [nx, ny] = pts[i + 1];
+      ctx.quadraticCurveTo(cx, cy, (cx + nx) / 2, (cy + ny) / 2);
+    }
+    const last = pts[pts.length - 1];
+    ctx.lineTo(last[0], last[1]);
     ctx.stroke();
   }
 }
