@@ -3,6 +3,7 @@
 mod config;
 mod poller;
 mod tray;
+mod window_state;
 
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::ManagerExt;
@@ -95,8 +96,19 @@ fn main() {
                     let _ = window.hide();
                 }
             }
+            if window.label() == "main" {
+                if let tauri::WindowEvent::Moved(pos) = event {
+                    window_state::save(window.app_handle(), *pos);
+                }
+            }
         })
         .setup(|app| {
+            // The main window is created hidden (tauri.conf.json) so it appears
+            // at the restored spot instead of jumping there after it is shown.
+            if let Some(main) = app.get_webview_window("main") {
+                window_state::restore(&main);
+                main.show()?;
+            }
             tray::build(app.handle())?;
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(poller::run(handle));

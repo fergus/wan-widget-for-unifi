@@ -18,7 +18,8 @@
         "transparent": true,
         "alwaysOnTop": true,
         "resizable": false,
-        "skipTaskbar": true
+        "skipTaskbar": true,
+        "visible": false
       },
       {
         "label": "settings",
