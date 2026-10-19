@@ -84,6 +84,17 @@
       </label>
     </fieldset>
 
+    <fieldset>
+      <legend>Updates</legend>
+      <div class="update-row">
+        <span>Version <span id="appVersion">-</span></span>
+        <span class="spacer"></span>
+        <button type="button" id="checkUpdate">Check for updates</button>
+        <button type="button" id="installUpdate" class="primary" hidden>Install and restart</button>
+      </div>
+      <small id="updateStatus">Checked once a day. Nothing installs until you choose it.</small>
+    </fieldset>
+
     <ul id="errors" class="errors" hidden></ul>
     <p id="result" class="result" hidden></p>
 

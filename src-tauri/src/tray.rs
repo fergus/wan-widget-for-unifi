@@ -1,4 +1,4 @@
-//! System tray: show/hide, click-through, settings, autostart, quit.
+//! System tray: show/hide, click-through, settings, autostart, updates, quit.
 
 use std::sync::Mutex;
 
@@ -15,12 +15,28 @@ const ID_CLICK_THROUGH: &str = "click_through";
 const ID_SETTINGS: &str = "settings";
 const ID_AUTOSTART: &str = "autostart";
 const ID_PIN: &str = "pin";
+const ID_UPDATE: &str = "update";
 const ID_QUIT: &str = "quit";
 
 /// Kept in managed state so the settings window can keep the tray checkboxes in sync.
 pub struct TrayState {
     pub autostart: CheckMenuItem<Wry>,
     pub pin: CheckMenuItem<Wry>,
+    pub update: MenuItem<Wry>,
+}
+
+pub fn set_update_text(app: &AppHandle, text: &str) {
+    if let Some(tray) = app.try_state::<TrayState>() {
+        let _ = tray.update.set_text(text);
+    }
+}
+
+/// Offers a found update in the tray, or goes back to the plain check item.
+pub fn show_update(app: &AppHandle, version: Option<&str>) {
+    match version {
+        Some(v) => set_update_text(app, &format!("Install update {v} and restart")),
+        None => set_update_text(app, "Check for updates"),
+    }
 }
 
 fn toggle_widget(app: &AppHandle) {
@@ -105,6 +121,7 @@ pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         crate::window_state::pinned(app),
         None::<&str>,
     )?;
+    let update = MenuItem::with_id(app, ID_UPDATE, "Check for updates", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, ID_QUIT, "Quit", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(
@@ -115,6 +132,7 @@ pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             &pin,
             &settings,
             &autostart,
+            &update,
             &sep,
             &quit,
         ],
@@ -123,6 +141,7 @@ pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     app.manage(TrayState {
         autostart: autostart.clone(),
         pin: pin.clone(),
+        update: update.clone(),
     });
 
     let icon = app
@@ -161,6 +180,9 @@ pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                     eprintln!("autostart change failed: {e}");
                     let _ = autostart.set_checked(!want);
                 }
+            }
+            ID_UPDATE => {
+                tauri::async_runtime::spawn(crate::updater::tray_clicked(app.clone()));
             }
             ID_QUIT => app.exit(0),
             _ => {}

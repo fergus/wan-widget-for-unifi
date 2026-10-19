@@ -25,6 +25,9 @@ const stub = {
   get_pinned: async () => false,
   set_pinned: async () => null,
   forget_pin: async () => null,
+  app_version: async () => "0.1.0",
+  check_update: async () => null,
+  install_update: async () => null,
 };
 const invoke = tauri && tauri.core ? tauri.core.invoke : (cmd, args) => stub[cmd](args);
 
@@ -94,13 +97,45 @@ async function refreshPinned() {
   $("pinToDesktop").checked = pinnedKnown;
 }
 
+function showUpdate(version, message) {
+  $("installUpdate").hidden = !version;
+  $("installUpdate").textContent = version ? "Install " + version + " and restart" : "Install and restart";
+  if (message) $("updateStatus").textContent = message;
+}
+
+async function onCheckUpdate() {
+  $("checkUpdate").disabled = true;
+  $("updateStatus").textContent = "Checking...";
+  try {
+    const version = await invoke("check_update");
+    showUpdate(version, version ? "Version " + version + " is available." : "You have the latest version.");
+  } catch (err) {
+    showUpdate(null, "Could not check for updates: " + errorList(err).join("; "));
+  } finally {
+    $("checkUpdate").disabled = false;
+  }
+}
+
+async function onInstallUpdate() {
+  setBusy(true);
+  $("updateStatus").textContent = "Downloading the update. The widget restarts when it is installed.";
+  try {
+    await invoke("install_update");
+  } catch (err) {
+    $("updateStatus").textContent = "Update failed: " + errorList(err).join("; ");
+    setBusy(false);
+  }
+}
+
 async function load() {
-  const [settings, stored] = await Promise.all([
+  const [settings, stored, version] = await Promise.all([
     invoke("get_settings"),
     refreshKeyHint(),
+    invoke("app_version"),
     refreshAutostart(),
     refreshPinned(),
   ]);
+  $("appVersion").textContent = version;
   writeForm(toForm(settings));
   applyTheme(settings.theme);
   if (!stored) showResult("Enter your UniFi API key to start.", false);
@@ -171,6 +206,12 @@ async function onForgetPin() {
 $("form").addEventListener("submit", onSave);
 $("test").addEventListener("click", onTest);
 $("forgetPin").addEventListener("click", onForgetPin);
+$("checkUpdate").addEventListener("click", onCheckUpdate);
+$("installUpdate").addEventListener("click", onInstallUpdate);
+// The daily background check announces what it finds.
+if (tauri && tauri.event) {
+  tauri.event.listen("update-available", (e) => showUpdate(e.payload, "Version " + e.payload + " is available."));
+}
 $("lookupEnabled").addEventListener("change", syncLookup);
 // Preview the chosen theme straight away; the value is saved with the other settings.
 $("theme").addEventListener("change", () => applyTheme($("theme").value));

@@ -4,6 +4,7 @@ mod config;
 mod pin;
 mod poller;
 mod tray;
+mod updater;
 mod window_state;
 
 use std::sync::Arc;
@@ -106,6 +107,23 @@ fn set_pinned(app: AppHandle, tray: tauri::State<tray::TrayState>, pinned: bool)
     let _ = tray.pin.set_checked(pinned);
 }
 
+#[tauri::command]
+fn app_version(app: AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
+/// Returns the version of an available update, or None when up to date.
+#[tauri::command]
+async fn check_update(app: AppHandle) -> Result<Option<String>, String> {
+    updater::check(&app).await
+}
+
+/// Installs the pending update. On Windows the app exits and restarts on success.
+#[tauri::command]
+async fn install_update(app: AppHandle) -> Result<(), String> {
+    updater::install(&app).await
+}
+
 fn main() {
     tauri::Builder::default()
         // Must be the first plugin. A second launch exits and brings this widget forward.
@@ -115,6 +133,7 @@ fn main() {
                 let _ = w.set_focus();
             }
         }))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -131,7 +150,10 @@ fn main() {
             get_pinned,
             set_pinned,
             latest_snapshot,
-            forget_pin
+            forget_pin,
+            app_version,
+            check_update,
+            install_update
         ])
         // Closing the settings window hides it so it can be reopened from the widget.
         .on_window_event(|window, event| {
@@ -156,8 +178,10 @@ fn main() {
             }
             tray::build(app.handle())?;
             app.manage(Arc::new(poller::Latest::default()));
+            app.manage(updater::Pending::default());
             let handle = app.handle().clone();
-            tauri::async_runtime::spawn(poller::run(handle));
+            tauri::async_runtime::spawn(poller::run(handle.clone()));
+            tauri::async_runtime::spawn(updater::run(handle));
             Ok(())
         })
         .run(tauri::generate_context!())
