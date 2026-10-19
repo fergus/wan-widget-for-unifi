@@ -1,10 +1,11 @@
 //! Background polling. Emits events to the UI; the API key never leaves this process.
 
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::Utc;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use widget_core::{ip, settings::Settings, unifi, usage};
 
 use crate::config;
@@ -19,16 +20,39 @@ struct Rates {
 }
 
 #[derive(Serialize, Clone)]
-struct Monthly {
+pub struct Monthly {
     rx: u64,
     tx: u64,
 }
 
 #[derive(Serialize, Clone)]
-struct IpInfo {
+pub struct IpInfo {
     external: Option<String>,
     wan: Option<String>,
     cgnat: bool,
+}
+
+/// Last monthly and IP values. These are emitted every 5 minutes, so a page that
+/// loads between emits would otherwise show blanks until the next one.
+#[derive(Default)]
+pub struct Latest {
+    monthly: Mutex<Option<Monthly>>,
+    ip: Mutex<Option<IpInfo>>,
+}
+
+#[derive(Serialize)]
+pub struct Snapshot {
+    monthly: Option<Monthly>,
+    ip: Option<IpInfo>,
+}
+
+impl Latest {
+    pub fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            monthly: self.monthly.lock().ok().and_then(|g| g.clone()),
+            ip: self.ip.lock().ok().and_then(|g| g.clone()),
+        }
+    }
 }
 
 fn client(s: &Settings) -> Result<reqwest::Client, reqwest::Error> {
@@ -88,6 +112,7 @@ pub async fn test_connection(s: &Settings, key: &str) -> Result<String, String> 
 }
 
 pub async fn run(app: AppHandle) {
+    let latest: Arc<Latest> = (*app.state::<Arc<Latest>>()).clone();
     let mut last_monthly: Option<std::time::Instant> = None;
     let mut last_ip: Option<std::time::Instant> = None;
     let mut wan_ip: Option<std::net::IpAddr> = None;
@@ -120,9 +145,15 @@ pub async fn run(app: AppHandle) {
         }
 
         if last_monthly.map_or(true, |t| t.elapsed() >= MONTHLY_EVERY) {
-            if let Ok(m) = fetch_monthly(&c, &s, &key).await {
-                last_monthly = Some(std::time::Instant::now());
-                let _ = app.emit("monthly-usage", m);
+            match fetch_monthly(&c, &s, &key).await {
+                Ok(m) => {
+                    last_monthly = Some(std::time::Instant::now());
+                    if let Ok(mut g) = latest.monthly.lock() {
+                        *g = Some(m.clone());
+                    }
+                    let _ = app.emit("monthly-usage", m);
+                }
+                Err(e) => eprintln!("monthly usage: {e}"),
             }
         }
 
@@ -130,21 +161,27 @@ pub async fn run(app: AppHandle) {
             let external = if s.ip_lookup_url.is_empty() {
                 None
             } else {
-                get_text(&c, &s.ip_lookup_url, None)
-                    .await
-                    .ok()
-                    .and_then(|b| ip::parse_lookup(&b).ok())
+                match get_text(&c, &s.ip_lookup_url, None).await {
+                    Ok(b) => ip::parse_lookup(&b)
+                        .map_err(|e| eprintln!("ip lookup parse: {e}"))
+                        .ok(),
+                    Err(e) => {
+                        eprintln!("ip lookup: {e}");
+                        None
+                    }
+                }
             };
             last_ip = Some(std::time::Instant::now());
             let v = ip::ip_view(external, wan_ip);
-            let _ = app.emit(
-                "ip-info",
-                IpInfo {
-                    external: v.external.map(|i| i.to_string()),
-                    wan: v.wan.map(|i| i.to_string()),
-                    cgnat: v.cgnat,
-                },
-            );
+            let info = IpInfo {
+                external: v.external.map(|i| i.to_string()),
+                wan: v.wan.map(|i| i.to_string()),
+                cgnat: v.cgnat,
+            };
+            if let Ok(mut g) = latest.ip.lock() {
+                *g = Some(info.clone());
+            }
+            let _ = app.emit("ip-info", info);
         }
 
         tokio::time::sleep(Duration::from_millis(s.poll_interval_ms)).await;

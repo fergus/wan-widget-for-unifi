@@ -5,6 +5,8 @@ mod poller;
 mod tray;
 mod window_state;
 
+use std::sync::Arc;
+
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::ManagerExt;
 use widget_core::settings::Settings;
@@ -54,6 +56,12 @@ fn open_settings(app: AppHandle) -> Result<(), String> {
 }
 
 /// Reads the real OS state (registry Run key) rather than a saved flag.
+/// Latest monthly and IP values, so the widget can show them straight after loading.
+#[tauri::command]
+fn latest_snapshot(latest: tauri::State<Arc<poller::Latest>>) -> poller::Snapshot {
+    latest.snapshot()
+}
+
 #[tauri::command]
 fn get_autostart(app: AppHandle) -> bool {
     app.autolaunch().is_enabled().unwrap_or(false)
@@ -86,7 +94,8 @@ fn main() {
             test_connection,
             open_settings,
             get_autostart,
-            set_autostart
+            set_autostart,
+            latest_snapshot
         ])
         // Closing the settings window hides it so it can be reopened from the widget.
         .on_window_event(|window, event| {
@@ -110,6 +119,7 @@ fn main() {
                 main.show()?;
             }
             tray::build(app.handle())?;
+            app.manage(Arc::new(poller::Latest::default()));
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(poller::run(handle));
             Ok(())

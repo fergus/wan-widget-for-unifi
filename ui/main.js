@@ -69,6 +69,11 @@ if (tauri && tauri.event) {
   tauri.event.listen("monthly-usage", (e) => onMonthly(e.payload));
   tauri.event.listen("ip-info", (e) => onIp(e.payload));
   tauri.event.listen("poll-status", (e) => onStatus(e.payload));
+  // Monthly and IP are only emitted every 5 minutes, so also fetch the latest values.
+  tauri.core.invoke("latest_snapshot").then(({ monthly, ip }) => {
+    if (monthly) onMonthly(monthly);
+    if (ip) onIp(ip);
+  });
 } else {
   // Plain browser preview: synthetic data so the layout can be checked without a gateway.
   onMonthly({ rx: 412e9, tx: 51e9 });
