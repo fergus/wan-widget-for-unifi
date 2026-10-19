@@ -1,6 +1,9 @@
 # WAN Widget for UniFi
 
-![The widget showing live download and upload rates, a throughput graph, 1.42 TB used this month, and the public IP with a CGNAT badge](docs/screenshot.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/widget-dark.png">
+  <img src="docs/images/widget-light.png" width="360" alt="The widget: download 2.0 Mbit/s and upload 1.8 Mbit/s above a live graph, with 463.0 GB used this month and a public IP with a CGNAT badge">
+</picture>
 
 A small Windows 11 desktop widget that shows, from your UniFi gateway's local API:
 
