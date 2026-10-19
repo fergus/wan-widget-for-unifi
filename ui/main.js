@@ -42,7 +42,8 @@ function onRates({ rx, tx }) {
 }
 
 function onMonthly({ rx, tx }) {
-  $("month").textContent = formatBytes(rx + tx) + "  (\u2193 " + formatBytes(rx) + " / \u2191 " + formatBytes(tx) + ")";
+  $("month").textContent = formatBytes(rx + tx);
+  $("month").title = "\u2193 " + formatBytes(rx) + "  /  \u2191 " + formatBytes(tx);
 }
 
 function onIp({ external, wan, cgnat }) {
