@@ -36,7 +36,11 @@ pub struct IpView {
 pub fn ip_view(external: Option<IpAddr>, wan: Option<IpAddr>) -> IpView {
     let cgnat = wan.map(is_cgnat).unwrap_or(false)
         || (external.is_some() && wan.is_some() && external != wan);
-    IpView { external, wan, cgnat }
+    IpView {
+        external,
+        wan,
+        cgnat,
+    }
 }
 
 #[cfg(test)]

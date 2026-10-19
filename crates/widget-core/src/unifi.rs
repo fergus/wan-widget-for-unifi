@@ -36,7 +36,11 @@ fn parse_envelope<T: for<'de> Deserialize<'de>>(body: &str) -> Result<Vec<T>, Pa
 }
 
 fn site_base(gateway_url: &str, site: &str) -> String {
-    format!("{}/proxy/network/api/s/{}", gateway_url.trim_end_matches('/'), site)
+    format!(
+        "{}/proxy/network/api/s/{}",
+        gateway_url.trim_end_matches('/'),
+        site
+    )
 }
 
 pub fn health_url(gateway_url: &str, site: &str) -> String {
@@ -203,8 +207,7 @@ mod tests {
 
     #[test]
     fn request_body_is_valid_json() {
-        let v: serde_json::Value =
-            serde_json::from_str(&daily_report_request(10, 20)).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&daily_report_request(10, 20)).unwrap();
         assert_eq!(v["start"], 10);
         assert_eq!(v["end"], 20);
     }

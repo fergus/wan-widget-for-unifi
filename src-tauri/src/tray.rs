@@ -24,7 +24,9 @@ pub struct TrayState {
 }
 
 fn toggle_widget(app: &AppHandle) {
-    let Some(w) = app.get_webview_window("main") else { return };
+    let Some(w) = app.get_webview_window("main") else {
+        return;
+    };
     if w.is_visible().unwrap_or(false) {
         let _ = w.hide();
     } else {
@@ -54,7 +56,9 @@ pub fn sync_icon(app: &AppHandle) {
         .and_then(|w| w.scale_factor().ok())
         .is_some_and(|s| s > 1.0);
     let want = (light, large);
-    let Ok(mut applied) = APPLIED.lock() else { return };
+    let Ok(mut applied) = APPLIED.lock() else {
+        return;
+    };
     if *applied == Some(want) {
         return;
     }
@@ -75,8 +79,14 @@ pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let toggle = MenuItem::with_id(app, ID_TOGGLE, "Show / hide widget", true, None::<&str>)?;
     // Click-through is deliberately never persisted: it always starts off, so a
     // widget that ignores the mouse can never be the only way back to the menu.
-    let click_through =
-        CheckMenuItem::with_id(app, ID_CLICK_THROUGH, "Click-through", true, false, None::<&str>)?;
+    let click_through = CheckMenuItem::with_id(
+        app,
+        ID_CLICK_THROUGH,
+        "Click-through",
+        true,
+        false,
+        None::<&str>,
+    )?;
     let settings = MenuItem::with_id(app, ID_SETTINGS, "Settings...", true, None::<&str>)?;
     let autostart_on = app.autolaunch().is_enabled().unwrap_or(false);
     let autostart = CheckMenuItem::with_id(
@@ -99,10 +109,21 @@ pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let sep = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(
         app,
-        &[&toggle, &click_through, &pin, &settings, &autostart, &sep, &quit],
+        &[
+            &toggle,
+            &click_through,
+            &pin,
+            &settings,
+            &autostart,
+            &sep,
+            &quit,
+        ],
     )?;
 
-    app.manage(TrayState { autostart: autostart.clone(), pin: pin.clone() });
+    app.manage(TrayState {
+        autostart: autostart.clone(),
+        pin: pin.clone(),
+    });
 
     let icon = app
         .default_window_icon()

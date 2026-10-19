@@ -19,7 +19,9 @@ const MAX_BACKOFF_MS: u64 = 60_000;
 
 /// Poll interval after `failures` consecutive gateway errors: doubles each time, capped.
 fn backoff_ms(base_ms: u64, failures: u32) -> u64 {
-    base_ms.saturating_mul(1u64 << failures.min(6)).min(MAX_BACKOFF_MS)
+    base_ms
+        .saturating_mul(1u64 << failures.min(6))
+        .min(MAX_BACKOFF_MS)
 }
 
 #[derive(Serialize, Clone)]
@@ -118,7 +120,10 @@ async fn fetch_monthly(c: &reqwest::Client, s: &Settings, key: &str) -> Result<M
     let text = resp.text().await.map_err(|e| e.to_string())?;
     let buckets = unifi::parse_daily_report(&text).map_err(|e| e.to_string())?;
     let t = usage::monthly_totals(&buckets, start);
-    Ok(Monthly { rx: t.rx_bytes, tx: t.tx_bytes })
+    Ok(Monthly {
+        rx: t.rx_bytes,
+        tx: t.tx_bytes,
+    })
 }
 
 /// One-off health request with the given (possibly unsaved) settings and key. It checks
@@ -183,19 +188,27 @@ pub async fn run(app: AppHandle) {
         };
 
         let health_url = unifi::health_url(&s.gateway_url, &s.site);
-        match get_text(&c, &health_url, Some(&key)).await.and_then(|b| {
-            unifi::parse_health(&b).map_err(|e| e.to_string())
-        }) {
+        match get_text(&c, &health_url, Some(&key))
+            .await
+            .and_then(|b| unifi::parse_health(&b).map_err(|e| e.to_string()))
+        {
             Ok(h) => {
                 failures = 0;
                 wan_ip = h.wan_ip;
                 let _ = app.emit("poll-status", "");
-                let _ = app.emit("wan-rates", Rates { rx: h.rx_bytes_per_s, tx: h.tx_bytes_per_s });
+                let _ = app.emit(
+                    "wan-rates",
+                    Rates {
+                        rx: h.rx_bytes_per_s,
+                        tx: h.tx_bytes_per_s,
+                    },
+                );
             }
             Err(e) => {
                 failures = failures.saturating_add(1);
                 let msg = if pin::mismatch() {
-                    "Gateway certificate changed. Forget the pin in Settings if that is expected".to_string()
+                    "Gateway certificate changed. Forget the pin in Settings if that is expected"
+                        .to_string()
                 } else {
                     format!("Gateway: {e}")
                 };
@@ -247,7 +260,11 @@ pub async fn run(app: AppHandle) {
             let _ = app.emit("ip-info", info);
         }
 
-        let wait_ms = if failures == 0 { s.poll_interval_ms } else { backoff_ms(s.poll_interval_ms, failures) };
+        let wait_ms = if failures == 0 {
+            s.poll_interval_ms
+        } else {
+            backoff_ms(s.poll_interval_ms, failures)
+        };
         // Sleep in short steps so a pin reset (Forget in Settings) retries straight away.
         let until = std::time::Instant::now() + Duration::from_millis(wait_ms);
         while std::time::Instant::now() < until {

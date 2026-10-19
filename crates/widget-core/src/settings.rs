@@ -64,7 +64,11 @@ impl Settings {
         if !["system", "dark", "light"].contains(&self.theme.as_str()) {
             errs.push("theme must be system, dark or light".into());
         }
-        if errs.is_empty() { Ok(()) } else { Err(errs) }
+        if errs.is_empty() {
+            Ok(())
+        } else {
+            Err(errs)
+        }
     }
 }
 
@@ -105,26 +109,41 @@ mod tests {
     #[test]
     fn theme_must_be_a_known_value() {
         for t in ["system", "dark", "light"] {
-            let s = Settings { theme: t.into(), ..Settings::default() };
+            let s = Settings {
+                theme: t.into(),
+                ..Settings::default()
+            };
             assert_eq!(s.validate(), Ok(()));
         }
-        let s = Settings { theme: "neon".into(), ..Settings::default() };
+        let s = Settings {
+            theme: "neon".into(),
+            ..Settings::default()
+        };
         assert!(s.validate().is_err());
     }
 
     #[test]
     fn empty_lookup_url_disables_lookup_and_is_valid() {
-        let s = Settings { ip_lookup_url: String::new(), ..Settings::default() };
+        let s = Settings {
+            ip_lookup_url: String::new(),
+            ..Settings::default()
+        };
         assert_eq!(s.validate(), Ok(()));
     }
 
     #[test]
     fn poll_interval_bounds_are_inclusive() {
         for ms in [1000, 60_000] {
-            let s = Settings { poll_interval_ms: ms, ..Settings::default() };
+            let s = Settings {
+                poll_interval_ms: ms,
+                ..Settings::default()
+            };
             assert_eq!(s.validate(), Ok(()));
         }
-        let s = Settings { poll_interval_ms: 999, ..Settings::default() };
+        let s = Settings {
+            poll_interval_ms: 999,
+            ..Settings::default()
+        };
         assert!(s.validate().is_err());
     }
 }

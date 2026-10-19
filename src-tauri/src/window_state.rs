@@ -17,7 +17,10 @@ struct Saved {
 }
 
 fn state_path(app: &AppHandle) -> Option<PathBuf> {
-    app.path().app_config_dir().ok().map(|d| d.join("window.json"))
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join("window.json"))
 }
 
 fn read(app: &AppHandle) -> Saved {
@@ -54,10 +57,14 @@ pub fn restore(window: &WebviewWindow) {
     let saved = read(app);
     apply_pin(window, saved.pinned);
     if let (Some(x), Some(y)) = (saved.x, saved.y) {
-        let on_screen = app.available_monitors().unwrap_or_default().iter().any(|m| {
-            let (p, s) = (m.position(), m.size());
-            x >= p.x && x < p.x + s.width as i32 && y >= p.y && y < p.y + s.height as i32
-        });
+        let on_screen = app
+            .available_monitors()
+            .unwrap_or_default()
+            .iter()
+            .any(|m| {
+                let (p, s) = (m.position(), m.size());
+                x >= p.x && x < p.x + s.width as i32 && y >= p.y && y < p.y + s.height as i32
+            });
         if on_screen {
             let _ = window.set_position(PhysicalPosition::new(x, y));
         }

@@ -73,7 +73,10 @@ fn host_key(name: &ServerName<'_>) -> String {
 }
 
 pub fn path(app: &AppHandle) -> Option<PathBuf> {
-    app.path().app_config_dir().ok().map(|d| d.join("gateway-pin.json"))
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join("gateway-pin.json"))
 }
 
 pub fn mismatch() -> bool {
@@ -81,7 +84,10 @@ pub fn mismatch() -> bool {
 }
 
 fn fingerprint(der: &[u8]) -> String {
-    Sha256::digest(der).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(der)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 fn read_pins(path: &Path) -> Stored {
@@ -126,7 +132,12 @@ impl ServerCertVerifier for PinVerifier {
         _now: UnixTime,
     ) -> Result<ServerCertVerified, Error> {
         let fp = fingerprint(end_entity.as_ref());
-        let (verdict, save) = check(&read_pins(&self.path), &host_key(server_name), &fp, self.record);
+        let (verdict, save) = check(
+            &read_pins(&self.path),
+            &host_key(server_name),
+            &fp,
+            self.record,
+        );
         if let Some(next) = save {
             write_pins(&self.path, &next);
         }
@@ -137,7 +148,9 @@ impl ServerCertVerifier for PinVerifier {
             }
             Verdict::Mismatch => {
                 MISMATCH.store(true, Ordering::Relaxed);
-                Err(Error::General("gateway certificate does not match the pinned one".into()))
+                Err(Error::General(
+                    "gateway certificate does not match the pinned one".into(),
+                ))
             }
         }
     }
@@ -148,7 +161,12 @@ impl ServerCertVerifier for PinVerifier {
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, Error> {
-        verify_tls12_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
+        verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
     }
 
     fn verify_tls13_signature(
@@ -157,11 +175,18 @@ impl ServerCertVerifier for PinVerifier {
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, Error> {
-        verify_tls13_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
+        verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        self.provider.signature_verification_algorithms.supported_schemes()
+        self.provider
+            .signature_verification_algorithms
+            .supported_schemes()
     }
 }
 
@@ -170,7 +195,11 @@ impl ServerCertVerifier for PinVerifier {
 /// of a host seen for the first time.
 pub fn tls_config(path: PathBuf, record: bool) -> Result<ClientConfig, Error> {
     let provider = Arc::new(rustls::crypto::ring::default_provider());
-    let verifier = PinVerifier { path, record, provider: provider.clone() };
+    let verifier = PinVerifier {
+        path,
+        record,
+        provider: provider.clone(),
+    };
     Ok(ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()?
         .dangerous()
@@ -184,7 +213,10 @@ mod tests {
 
     fn pins(hosts: &[(&str, &str)]) -> Stored {
         Stored {
-            hosts: hosts.iter().map(|(h, f)| (h.to_string(), f.to_string())).collect(),
+            hosts: hosts
+                .iter()
+                .map(|(h, f)| (h.to_string(), f.to_string()))
+                .collect(),
             sha256: None,
         }
     }
@@ -217,8 +249,14 @@ mod tests {
         let stored = pins(&[("192.168.1.1", "aa")]);
         let (v, save) = check(&stored, "gateway.lan", "bb", true);
         assert_eq!(v, Verdict::Trusted);
-        assert_eq!(save, Some(pins(&[("192.168.1.1", "aa"), ("gateway.lan", "bb")])));
-        assert_eq!(check(&stored, "192.168.1.1", "aa", true), (Verdict::Trusted, None));
+        assert_eq!(
+            save,
+            Some(pins(&[("192.168.1.1", "aa"), ("gateway.lan", "bb")]))
+        );
+        assert_eq!(
+            check(&stored, "192.168.1.1", "aa", true),
+            (Verdict::Trusted, None)
+        );
     }
 
     #[test]
@@ -227,6 +265,9 @@ mod tests {
         let (v, save) = check(&legacy, "192.168.1.1", "aa", true);
         assert_eq!(v, Verdict::Trusted);
         assert_eq!(save, Some(pins(&[("192.168.1.1", "aa")])));
-        assert_eq!(check(&legacy, "192.168.1.1", "bb", true).0, Verdict::Mismatch);
+        assert_eq!(
+            check(&legacy, "192.168.1.1", "bb", true).0,
+            Verdict::Mismatch
+        );
     }
 }

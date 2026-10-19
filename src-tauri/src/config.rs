@@ -20,7 +20,10 @@ pub fn take_changed() -> bool {
 }
 
 fn settings_path(app: &AppHandle) -> Option<PathBuf> {
-    app.path().app_config_dir().ok().map(|d| d.join("settings.json"))
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join("settings.json"))
 }
 
 /// Falls back to defaults when the file is missing or unreadable.

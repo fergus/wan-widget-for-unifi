@@ -22,7 +22,11 @@ impl Totals {
 }
 
 fn days_in_month(year: i32, month: u32) -> u32 {
-    let (ny, nm) = if month == 12 { (year + 1, 1) } else { (year, month + 1) };
+    let (ny, nm) = if month == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month + 1)
+    };
     let first_next = NaiveDate::from_ymd_opt(ny, nm, 1).expect("valid date");
     first_next.pred_opt().expect("valid date").day()
 }
@@ -112,14 +116,22 @@ mod tests {
     }
 
     fn b(start_ms: i64, rx: u64, tx: u64) -> DayBucket {
-        DayBucket { start_ms, rx_bytes: rx, tx_bytes: tx }
+        DayBucket {
+            start_ms,
+            rx_bytes: rx,
+            tx_bytes: tx,
+        }
     }
 
     #[test]
     fn totals_include_bucket_at_cycle_start_and_exclude_earlier() {
         let start = utc(2026, 9, 30, 14);
         let t0 = start.timestamp_millis();
-        let buckets = [b(t0 - 86_400_000, 100, 10), b(t0, 5, 1), b(t0 + 86_400_000, 7, 2)];
+        let buckets = [
+            b(t0 - 86_400_000, 100, 10),
+            b(t0, 5, 1),
+            b(t0 + 86_400_000, 7, 2),
+        ];
         let t = monthly_totals(&buckets, start);
         assert_eq!((t.rx_bytes, t.tx_bytes, t.total()), (12, 3, 15));
     }
