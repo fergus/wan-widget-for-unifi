@@ -9,8 +9,27 @@ const css = (name) => getComputedStyle(document.documentElement).getPropertyValu
 
 let samples = [];
 
+// Size the backing store to the screen's pixels so lines stay sharp at 125-200% scaling.
+// Checked on every draw because the window can move to a monitor with other scaling.
+function fitCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (!w || !h) return null;
+  const pw = Math.round(w * dpr);
+  const ph = Math.round(h * dpr);
+  if (canvas.width !== pw || canvas.height !== ph) {
+    canvas.width = pw;
+    canvas.height = ph;
+  }
+  ctx.setTransform(pw / w, 0, 0, ph / h, 0, 0);
+  return { w, h };
+}
+
 function draw() {
-  const { width: w, height: h } = canvas;
+  const size = fitCanvas();
+  if (!size) return;
+  const { w, h } = size;
   ctx.clearRect(0, 0, w, h);
   const top = yMax(samples);
   const step = w / (MAX_POINTS - 1);

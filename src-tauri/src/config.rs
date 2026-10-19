@@ -2,12 +2,22 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::{AppHandle, Manager};
 use widget_core::settings::Settings;
 
 const KEYRING_SERVICE: &str = "unifi-widget";
 const KEYRING_USER: &str = "api-key";
+
+/// Set when Settings saves the settings or the key, so the poller reloads them.
+/// Starts set so the first poll loads both.
+static CHANGED: AtomicBool = AtomicBool::new(true);
+
+/// True once after each save. The poller reloads settings and key only then.
+pub fn take_changed() -> bool {
+    CHANGED.swap(false, Ordering::Relaxed)
+}
 
 fn settings_path(app: &AppHandle) -> Option<PathBuf> {
     app.path().app_config_dir().ok().map(|d| d.join("settings.json"))
@@ -28,7 +38,9 @@ pub fn save_settings(app: &AppHandle, settings: &Settings) -> Result<(), Vec<Str
         fs::create_dir_all(dir).map_err(|e| vec![e.to_string()])?;
     }
     let json = serde_json::to_string_pretty(settings).map_err(|e| vec![e.to_string()])?;
-    fs::write(path, json).map_err(|e| vec![e.to_string()])
+    fs::write(path, json).map_err(|e| vec![e.to_string()])?;
+    CHANGED.store(true, Ordering::Relaxed);
+    Ok(())
 }
 
 pub fn save_api_key(key: &str) -> Result<(), String> {
@@ -38,7 +50,9 @@ pub fn save_api_key(key: &str) -> Result<(), String> {
     }
     keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
         .and_then(|e| e.set_password(key))
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    CHANGED.store(true, Ordering::Relaxed);
+    Ok(())
 }
 
 pub fn has_api_key() -> bool {

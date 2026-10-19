@@ -65,11 +65,13 @@ impl Latest {
 }
 
 /// Gateway client. With accept_invalid_certs the gateway's self-signed certificate is
-/// checked against the pin in pin_path instead of the public CA roots.
-fn client(s: &Settings, pin_path: &Path) -> Result<reqwest::Client, String> {
+/// checked against the pin in pin_path instead of the public CA roots. `record` saves the
+/// pin for a host seen for the first time; Test connection passes false.
+fn client(s: &Settings, pin_path: &Path, record: bool) -> Result<reqwest::Client, String> {
     let builder = reqwest::Client::builder().timeout(Duration::from_secs(8));
     let builder = if s.accept_invalid_certs {
-        builder.use_preconfigured_tls(pin::tls_config(pin_path.to_path_buf()).map_err(|e| e.to_string())?)
+        let tls = pin::tls_config(pin_path.to_path_buf(), record).map_err(|e| e.to_string())?;
+        builder.use_preconfigured_tls(tls)
     } else {
         builder
     };
@@ -119,10 +121,11 @@ async fn fetch_monthly(c: &reqwest::Client, s: &Settings, key: &str) -> Result<M
     Ok(Monthly { rx: t.rx_bytes, tx: t.tx_bytes })
 }
 
-/// One-off health request with the given (possibly unsaved) settings and key.
+/// One-off health request with the given (possibly unsaved) settings and key. It checks
+/// an existing pin but never records one, so testing a mistyped address pins nothing.
 pub async fn test_connection(s: &Settings, key: &str, pin_path: &Path) -> Result<String, String> {
     s.validate().map_err(|errs| errs.join("; "))?;
-    let c = client(s, pin_path)?;
+    let c = client(s, pin_path, false)?;
     let body = get_text(&c, &unifi::health_url(&s.gateway_url, &s.site), Some(key)).await?;
     let h = unifi::parse_health(&body).map_err(|e| e.to_string())?;
     Ok(format!(
@@ -141,27 +144,42 @@ pub async fn run(app: AppHandle) {
     let mut monthly_due = std::time::Instant::now();
     let mut last_ip: Option<std::time::Instant> = None;
     let mut wan_ip: Option<std::net::IpAddr> = None;
+    let lookup = plain_client();
+    let mut s = Settings::default();
+    let mut api_key: Option<String> = None;
+    // Kept between polls so connections to the gateway are reused, not re-handshaken.
+    let mut gateway: Option<reqwest::Client> = None;
 
     loop {
-        // Re-read each cycle so settings and key changes apply without a restart.
-        let s = config::load_settings(&app);
-        if last_theme.as_deref() != Some(s.theme.as_str()) {
-            let _ = app.emit("theme", s.theme.clone());
-            last_theme = Some(s.theme.clone());
+        // Settings saves set the flag, so changes apply without a restart.
+        if config::take_changed() {
+            s = config::load_settings(&app);
+            api_key = config::load_api_key();
+            gateway = None;
+            if last_theme.as_deref() != Some(s.theme.as_str()) {
+                let _ = app.emit("theme", s.theme.clone());
+                last_theme = Some(s.theme.clone());
+            }
         }
         crate::tray::sync_icon(&app);
-        let Some(key) = config::load_api_key() else {
+        let Some(key) = api_key.clone() else {
             let _ = app.emit("poll-status", "No API key set");
             tokio::time::sleep(Duration::from_secs(2)).await;
             continue;
         };
-        let c = match client(&s, &pin_path) {
-            Ok(c) => c,
-            Err(e) => {
-                let _ = app.emit("poll-status", format!("Gateway: {e}"));
-                tokio::time::sleep(Duration::from_secs(5)).await;
-                continue;
-            }
+        let c = match &gateway {
+            Some(c) => c.clone(),
+            None => match client(&s, &pin_path, true) {
+                Ok(c) => {
+                    gateway = Some(c.clone());
+                    c
+                }
+                Err(e) => {
+                    let _ = app.emit("poll-status", format!("Gateway: {e}"));
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    continue;
+                }
+            },
         };
 
         let health_url = unifi::health_url(&s.gateway_url, &s.site);
@@ -206,7 +224,7 @@ pub async fn run(app: AppHandle) {
             let external = if s.ip_lookup_url.is_empty() {
                 None
             } else {
-                match get_text(&plain_client(), &s.ip_lookup_url, None).await {
+                match get_text(&lookup, &s.ip_lookup_url, None).await {
                     Ok(b) => ip::parse_lookup(&b)
                         .map_err(|e| eprintln!("ip lookup parse: {e}"))
                         .ok(),

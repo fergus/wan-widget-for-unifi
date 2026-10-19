@@ -108,6 +108,13 @@ fn set_pinned(app: AppHandle, tray: tauri::State<tray::TrayState>, pinned: bool)
 
 fn main() {
     tauri::Builder::default()
+        // Must be the first plugin. A second launch exits and brings this widget forward.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
