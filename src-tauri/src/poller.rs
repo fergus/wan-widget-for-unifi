@@ -220,7 +220,7 @@ pub async fn run(app: AppHandle) {
             }
         }
 
-        if last_ip.map_or(true, |t| t.elapsed() >= IP_EVERY) {
+        if last_ip.is_none_or(|t| t.elapsed() >= IP_EVERY) {
             let external = if s.ip_lookup_url.is_empty() {
                 None
             } else {

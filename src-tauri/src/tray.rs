@@ -52,7 +52,7 @@ pub fn sync_icon(app: &AppHandle) {
     let large = app
         .get_webview_window("main")
         .and_then(|w| w.scale_factor().ok())
-        .map_or(false, |s| s > 1.0);
+        .is_some_and(|s| s > 1.0);
     let want = (light, large);
     let Ok(mut applied) = APPLIED.lock() else { return };
     if *applied == Some(want) {
