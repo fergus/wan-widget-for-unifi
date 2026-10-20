@@ -51,3 +51,4 @@ footer span:not(.label):not(.badge) { color: var(--fg); }
 .card.stale canvas, .card.stale .rate { opacity: 0.4; }
 /* Away from the home network: everything shown is the last known value, so dim it all. */
 .card.away canvas, .card.away .rate, .card.away footer { opacity: 0.4; }
+.card.away #rx { color: var(--fg); }

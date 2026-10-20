@@ -2,7 +2,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/widget-dark.png">
-  <img src="docs/images/widget-light.png" width="360" alt="The widget: download 2.0 Mbit/s and upload 1.8 Mbit/s above a live graph, with 463.0 GB used this month and a public IP with a CGNAT badge">
+  <img src="docs/images/widget-light.png" width="360" alt="The widget: download 2.8 Mbit/s and upload 2.0 Mbit/s above a live graph, with 463.0 GB used this month, 1d 5h uptime, a public IP with a CGNAT badge and 10 ms latency">
 </picture>
 
 A small Windows 11 desktop widget that shows, from your UniFi gateway's local API:
@@ -10,8 +10,9 @@ A small Windows 11 desktop widget that shows, from your UniFi gateway's local AP
 - a live graph of WAN download and upload throughput
 - data used so far in your billing month
 - your public IP address, with a CGNAT badge when the gateway's WAN address differs
-- internet latency and how long the WAN link has been up since its last disconnect
-- an "Away" state that pauses polling when you take the PC off your home network
+- uptime: how long the WAN link has been up since its last disconnect
+- internet latency, as measured by the gateway
+- an "Away" state that pauses everything when you take the PC off your home network
 
 It sits on top of other windows or pins to the desktop, lives in the tray, and can
 start with Windows.
@@ -34,10 +35,63 @@ start with Windows.
 3. Set your billing day so the monthly figure resets when your ISP's month does. The
    month starts at midnight in the gateway's timezone, which the widget reads from the
    gateway. Set a timezone only to override it.
+4. Press **Save**. The widget starts showing live numbers within a few seconds. Turn on
+   **Start with Windows** if you want it every time you sign in.
 
 The gateway uses a self-signed certificate. The widget trusts the certificate it sees
 on the first connection and refuses a different one later, until you press
 **Forget pinned certificate** in Settings.
+
+## Using the widget
+
+Hover a figure for detail:
+
+| Field | Tooltip |
+|---|---|
+| Month | The download and upload split for the billing month |
+| Uptime | Your ISP, how long the WAN link has been up and when it came up, and how long the gateway itself has been running and when it booted |
+| IP | Your public IP and the gateway's WAN address |
+| Latency | Latency to each target the gateway monitors (Microsoft, Google and Cloudflare, as in the UniFi app), the average, lowest and highest over the last few minutes, and WAN availability over the last 24 hours |
+
+Latency and uptime come from the gateway, not from this PC, so they describe your
+internet connection and not your Wi-Fi. The per-target latency and availability need a
+gateway that reports `uptime_stats`; if yours does not, you still get the overall
+latency.
+
+The tray menu (left-click the icon to show or hide the widget) has Click-through, Pin
+to desktop, Check gateway now, Settings, Start with Windows and Check for updates.
+
+### Away from home
+
+<picture>
+  <img src="docs/images/widget-away.png" width="360" alt="The widget dimmed, with Away in place of the rates and a banner reading Away from your home network. Paused. Click to check again">
+</picture>
+
+The widget talks only to your gateway, so away from home it has nothing to show. After
+three polls in a row get no answer **and** the PC's network address has changed since
+the last good reading, it says Away, dims the last values and stops polling. Nothing is
+sent to the gateway or the IP lookup until it resumes, which happens when:
+
+- the PC's network address changes (you join another network, or come home),
+- you click the banner or choose **Check gateway now** in the tray, or
+- you save settings.
+
+If the gateway is down while the PC is still on your home network, the widget does not
+go Away. It keeps retrying, backing off to once a minute, and recovers by itself.
+
+### If something looks wrong
+
+| You see | Likely cause |
+|---|---|
+| "The gateway rejected the API key" | The key is wrong or was deleted. Create a new one and paste it in Settings |
+| "The gateway has no site with that name" | The site in Settings is not `default`. Use the site's name as shown in the UniFi Network app |
+| "Can't reach the gateway" | Wrong address, or this PC is not on the gateway's network. Away mode takes over after about 30 seconds if you have left it |
+| "The gateway's certificate has changed" | The gateway regenerated its certificate. If you expected that, press **Forget pinned certificate** in Settings |
+| "No recent data" | The widget has not heard from the gateway for 15 seconds. It dims and recovers on its own |
+| Uptime or Latency shows `-` | The gateway did not report it. Updating the Network app or console firmware may help |
+
+Settings has **Test connection** and **Open log folder**; attach the log when reporting
+a problem.
 
 ### Privacy
 

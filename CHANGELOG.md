@@ -3,7 +3,7 @@
 All notable changes to WAN Widget for UniFi. Versions follow
 [semantic versioning](https://semver.org/).
 
-## Unreleased
+## 0.2.0 - 2026-10-20
 
 - Latency (gateway to internet, as measured by the gateway) and how long the WAN link
   has been up since its last disconnect. Hover them for detail: latency per monitor

@@ -216,8 +216,10 @@ if (tauri && tauri.event) {
   onMonthly({ rx: 412e9, tx: 51e9 });
   onIp({ external: "203.0.113.7", wan: "100.64.10.20", cgnat: true });
   onUptime({ seconds: 106_380, device_seconds: 3_235_463, isp: "ExampleISP" });
-  // Add ?away to the page URL to preview the away state.
-  if (location.search.includes("away")) onAway(true);
+  // Preview options in the page URL: ?away for the away state, ?theme=dark or light.
+  const query = new URLSearchParams(location.search);
+  if (query.has("theme")) applyTheme(query.get("theme"));
+  if (query.has("away")) onAway(true);
   let t = 0;
   setInterval(() => {
     t += 1;
