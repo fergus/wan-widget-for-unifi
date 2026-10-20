@@ -108,8 +108,12 @@ let uptime = null;
 
 function onUptime({ seconds, device_seconds: deviceSeconds, isp }) {
   const num = (n) => (typeof n === "number" ? n : null);
-  uptime = num(seconds) === null ? null : { seconds, deviceSeconds: num(deviceSeconds), isp: isp || null, at: Date.now() };
-  showUptime(false, true);
+  // Keep the record if either figure is known: a gateway can report its own uptime while
+  // its WAN link uptime is missing (for example while the link is down).
+  const wan = num(seconds);
+  const device = num(deviceSeconds);
+  uptime = wan === null && device === null ? null : { seconds: wan, deviceSeconds: device, isp: isp || null, at: Date.now() };
+  showUptime();
 }
 
 const WHEN = { dateStyle: "medium", timeStyle: "short" };
@@ -121,7 +125,7 @@ function since(label, seconds, elapsed) {
   return label + " " + formatDuration(s) + " (since " + new Date(Date.now() - s * 1000).toLocaleString([], WHEN) + ")";
 }
 
-function showUptime(stale = false, refresh = false) {
+function showUptime(stale = false) {
   const el = $("uptime");
   if (!uptime || away || stale) {
     el.textContent = "-";
@@ -129,16 +133,16 @@ function showUptime(stale = false, refresh = false) {
     return;
   }
   const elapsed = (Date.now() - uptime.at) / 1000;
-  const text = formatDuration(uptime.seconds + elapsed);
-  // The tooltip changes with the text, i.e. once a minute, so it never flickers.
-  if (refresh || el.textContent !== text) {
-    el.textContent = text;
-    el.title = [
-      uptime.isp && "ISP: " + uptime.isp,
-      since("WAN link up for", uptime.seconds, elapsed),
-      since("Gateway up for", uptime.deviceSeconds, elapsed),
-    ].filter(Boolean).join("\n");
-  }
+  // The figure is the WAN link's uptime; with no WAN figure the tooltip still has the rest.
+  const text = uptime.seconds === null ? "-" : formatDuration(uptime.seconds + elapsed);
+  const tip = [
+    uptime.isp && "ISP: " + uptime.isp,
+    uptime.seconds === null ? "WAN link uptime not reported" : since("WAN link up for", uptime.seconds, elapsed),
+    since("Gateway up for", uptime.deviceSeconds, elapsed),
+  ].filter(Boolean).join("\n");
+  // Only written when changed (about once a minute), so an open tooltip does not flicker.
+  if (el.textContent !== text) el.textContent = text;
+  if (el.title !== tip) el.title = tip;
 }
 
 // Away: the gateway is not reachable from this network, so polling is paused. Keep the
@@ -215,9 +219,10 @@ if (tauri && tauri.event) {
   // Plain browser preview: synthetic data so the layout can be checked without a gateway.
   onMonthly({ rx: 412e9, tx: 51e9 });
   onIp({ external: "203.0.113.7", wan: "100.64.10.20", cgnat: true });
-  onUptime({ seconds: 106_380, device_seconds: 3_235_463, isp: "ExampleISP" });
-  // Preview options in the page URL: ?away for the away state, ?theme=dark or light.
+  // Preview options in the page URL: ?away for the away state, ?theme=dark or light,
+  // ?nowan for a gateway that reports no WAN link uptime.
   const query = new URLSearchParams(location.search);
+  onUptime({ seconds: query.has("nowan") ? null : 106_380, device_seconds: 3_235_463, isp: "ExampleISP" });
   if (query.has("theme")) applyTheme(query.get("theme"));
   if (query.has("away")) onAway(true);
   let t = 0;
