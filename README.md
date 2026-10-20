@@ -53,10 +53,9 @@ Hover a figure for detail:
 | IP | Your public IP and the gateway's WAN address |
 | Latency | Latency to each target the gateway monitors (Microsoft, Google and Cloudflare, as in the UniFi app), the average, lowest and highest over the last few minutes, and WAN availability over the last 24 hours |
 
-Latency and uptime come from the gateway, not from this PC, so they describe your
-internet connection and not your Wi-Fi. The per-target latency and availability need a
-gateway that reports `uptime_stats`; if yours does not, you still get the overall
-latency.
+Latency and uptime are measured by the gateway, so they describe your internet
+connection rather than your Wi-Fi. Per-target latency and availability need a gateway
+that reports `uptime_stats`; without it you still get the overall latency.
 
 The tray menu (left-click the icon to show or hide the widget) has Click-through, Pin
 to desktop, Check gateway now, Settings, Start with Windows and Check for updates.
@@ -68,8 +67,8 @@ to desktop, Check gateway now, Settings, Start with Windows and Check for update
 </picture>
 
 The widget talks only to your gateway, so away from home it has nothing to show. After
-three polls in a row get no answer **and** the PC's network address has changed since
-the last good reading, it says Away, dims the last values and stops polling. Nothing is
+three polls in a row get no answer and the PC's network address has changed since the
+last good reading, it says Away, dims the last values and stops polling. Nothing is
 sent to the gateway or the IP lookup until it resumes, which happens when:
 
 - the PC's network address changes (you join another network, or come home),
@@ -88,7 +87,7 @@ go Away. It keeps retrying, backing off to once a minute, and recovers by itself
 | "Can't reach the gateway" | Wrong address, or this PC is not on the gateway's network. Away mode takes over after about 30 seconds if you have left it |
 | "The gateway's certificate has changed" | The gateway regenerated its certificate. If you expected that, press **Forget pinned certificate** in Settings |
 | "No recent data" | The widget has not heard from the gateway for 15 seconds. It dims and recovers on its own |
-| Uptime or Latency shows `-` | The gateway did not report it. Updating the Network app or console firmware may help |
+| Uptime or Latency shows `-` | The gateway did not report it. Older Network versions may not; check for an update |
 
 Settings has **Test connection** and **Open log folder**; attach the log when reporting
 a problem.
