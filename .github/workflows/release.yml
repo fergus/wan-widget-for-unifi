@@ -27,6 +27,29 @@ jobs:
             exit 1
           }
 
+      # The changelog entry becomes the release notes, so a release without one is refused.
+      # scripts/prepare-release.ps1 writes the dated heading this looks for.
+      - name: Read the changelog entry for this version
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          $text = Get-Content CHANGELOG.md -Raw
+          $pattern = '(?ms)^## ' + [regex]::Escape($version) + ' - \d{4}-\d{2}-\d{2}[ \t]*\r?\n(?<body>.*?)(?=^## |\z)'
+          $m = [regex]::Match($text, $pattern)
+          if (-not $m.Success) {
+            Write-Error "CHANGELOG.md has no '## $version - YYYY-MM-DD' entry"
+            exit 1
+          }
+          $body = $m.Groups['body'].Value.Trim()
+          if (-not $body) {
+            Write-Error "The CHANGELOG.md entry for $version is empty"
+            exit 1
+          }
+          $delim = "NOTES_" + [guid]::NewGuid().ToString('N')
+          Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_NOTES<<$delim"
+          Add-Content -Path $env:GITHUB_ENV -Value $body
+          Add-Content -Path $env:GITHUB_ENV -Value $delim
+
       - name: Check the updater signing key is set
         shell: pwsh
         env:
@@ -55,11 +78,16 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: WAN Widget for UniFi ${{ github.ref_name }}
           releaseBody: |
+            ${{ env.RELEASE_NOTES }}
+
+            ---
+
             Download the `-setup.exe` below and run it. It installs for your user only, so no admin rights are needed.
 
             The installer is not code-signed yet, so Windows SmartScreen may warn about it. Choose **More info**, then **Run anyway**.
           releaseDraft: true
-          generateReleaseNotes: true
+          # The notes come from CHANGELOG.md, not from a generated list of pull requests.
+          generateReleaseNotes: false
           # latest.json is what installed copies read to find and verify the update.
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
