@@ -55,6 +55,38 @@ pub fn sysinfo_url(gateway_url: &str, site: &str) -> String {
     format!("{}/stat/sysinfo", site_base(gateway_url, site))
 }
 
+pub fn device_url(gateway_url: &str, site: &str) -> String {
+    format!("{}/stat/device", site_base(gateway_url, site))
+}
+
+#[derive(Deserialize)]
+struct DeviceEntry {
+    /// Only the gateway has a `wan1` block (it is null on switches and access points).
+    wan1: Option<Wan1>,
+    uplink: Option<Uplink>,
+}
+
+#[derive(Deserialize)]
+struct Wan1 {}
+
+#[derive(Deserialize)]
+struct Uplink {
+    uptime: Option<f64>,
+}
+
+/// Seconds the gateway's WAN link has been up, i.e. the time since its last disconnect,
+/// from `stat/device`. On the gateway (the device with a `wan1` block) this is
+/// `uplink.uptime`; the device's own `uptime` is time since it booted, which is not the
+/// same. None if the gateway does not report it.
+pub fn parse_wan_uptime(body: &str) -> Result<Option<u64>, ParseError> {
+    Ok(parse_envelope::<DeviceEntry>(body)?
+        .into_iter()
+        .find(|d| d.wan1.is_some())
+        .and_then(|d| d.uplink)
+        .and_then(|u| u.uptime)
+        .map(|u| u.max(0.0) as u64))
+}
+
 #[derive(Deserialize)]
 struct SysinfoEntry {
     timezone: Option<String>,
@@ -76,11 +108,14 @@ pub struct WanHealth {
     pub tx_bytes_per_s: u64,
     pub wan_ip: Option<IpAddr>,
     pub isp_name: Option<String>,
+    /// Gateway-to-internet latency in ms, measured by the gateway (the `www` subsystem).
+    pub latency_ms: Option<u32>,
 }
 
 #[derive(Deserialize)]
 struct HealthEntry {
     subsystem: String,
+    latency: Option<f64>,
     #[serde(rename = "rx_bytes-r")]
     rx: Option<f64>,
     #[serde(rename = "tx_bytes-r")]
@@ -90,7 +125,13 @@ struct HealthEntry {
 }
 
 pub fn parse_health(body: &str) -> Result<WanHealth, ParseError> {
-    let wan = parse_envelope::<HealthEntry>(body)?
+    let entries = parse_envelope::<HealthEntry>(body)?;
+    let latency_ms = entries
+        .iter()
+        .find(|e| e.subsystem == "www")
+        .and_then(|e| e.latency)
+        .map(|l| l.max(0.0).round() as u32);
+    let wan = entries
         .into_iter()
         .find(|e| e.subsystem == "wan")
         .ok_or(ParseError::NoWan)?;
@@ -99,6 +140,7 @@ pub fn parse_health(body: &str) -> Result<WanHealth, ParseError> {
         tx_bytes_per_s: wan.tx.unwrap_or(0.0).max(0.0) as u64,
         wan_ip: wan.wan_ip.and_then(|s| s.parse().ok()),
         isp_name: wan.isp_name,
+        latency_ms,
     })
 }
 
@@ -179,6 +221,38 @@ mod tests {
         assert_eq!(h.tx_bytes_per_s, 356_527);
         assert_eq!(h.wan_ip, Some("100.64.10.20".parse().unwrap()));
         assert_eq!(h.isp_name.as_deref(), Some("ExampleISP"));
+        assert_eq!(h.latency_ms, Some(9));
+    }
+
+    #[test]
+    fn latency_is_absent_without_a_www_subsystem() {
+        let body = r#"{"meta":{"rc":"ok"},"data":[{"subsystem":"wan"}]}"#;
+        assert_eq!(parse_health(body).unwrap().latency_ms, None);
+    }
+
+    #[test]
+    fn wan_uptime_comes_from_the_gateway_not_other_devices() {
+        let body = include_str!("../tests/fixtures/device.json");
+        // Recorded from a UCG Ultra: link up 106380 s, device up 3235463 s.
+        assert_eq!(parse_wan_uptime(body), Ok(Some(106_380)));
+        assert_eq!(
+            device_url("https://192.168.1.1/", "default"),
+            "https://192.168.1.1/proxy/network/api/s/default/stat/device"
+        );
+    }
+
+    #[test]
+    fn wan_uptime_is_none_when_no_device_reports_it() {
+        // A switch's uplink.uptime must not be mistaken for the WAN link's.
+        let body =
+            r#"{"meta":{"rc":"ok"},"data":[{"type":"usw","wan1":null,"uplink":{"uptime":5}}]}"#;
+        assert_eq!(parse_wan_uptime(body), Ok(None));
+        let no_uptime = r#"{"meta":{"rc":"ok"},"data":[{"type":"udm","wan1":{},"uplink":{}}]}"#;
+        assert_eq!(parse_wan_uptime(no_uptime), Ok(None));
+        assert!(matches!(
+            parse_wan_uptime(ERROR),
+            Err(ParseError::Controller(_))
+        ));
     }
 
     #[test]

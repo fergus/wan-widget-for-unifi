@@ -34,3 +34,20 @@ export function formatBytes(n) {
   if (n >= 1e6) return (n / 1e6).toFixed(0) + " MB";
   return Math.round(n / 1e3) + " kB";
 }
+
+/** Whole seconds as the two largest units, e.g. "12d 4h", "5h 12m", "3m". */
+export function formatDuration(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return d + "d " + h + "h";
+  if (h > 0) return h + "h " + m + "m";
+  if (m > 0) return m + "m";
+  return "<1m";
+}
+
+/** Latency in whole milliseconds, or a dash when the gateway did not report one. */
+export function formatLatency(ms) {
+  return typeof ms === "number" ? Math.round(ms) + " ms" : "-";
+}

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pushSample, yMax, formatRate, formatBytes } from "./series.js";
+import { pushSample, yMax, formatRate, formatBytes, formatDuration, formatLatency } from "./series.js";
 
 test("pushSample caps the buffer and drops the oldest", () => {
   let buf = [];
@@ -38,4 +38,21 @@ test("formatBytes uses decimal units", () => {
   assert.equal(formatBytes(69.6e9), "69.6 GB");
   assert.equal(formatBytes(5e6), "5 MB");
   assert.equal(formatBytes(500), "1 kB");
+});
+
+test("formatDuration shows the two largest units", () => {
+  assert.equal(formatDuration(0), "<1m");
+  assert.equal(formatDuration(59), "<1m");
+  assert.equal(formatDuration(180), "3m");
+  assert.equal(formatDuration(5 * 3600 + 12 * 60 + 40), "5h 12m");
+  assert.equal(formatDuration(12 * 86400 + 4 * 3600 + 59 * 60), "12d 4h");
+  assert.equal(formatDuration(-5), "<1m");
+});
+
+test("formatLatency rounds and falls back to a dash", () => {
+  assert.equal(formatLatency(9), "9 ms");
+  assert.equal(formatLatency(9.6), "10 ms");
+  assert.equal(formatLatency(0), "0 ms");
+  assert.equal(formatLatency(null), "-");
+  assert.equal(formatLatency(undefined), "-");
 });

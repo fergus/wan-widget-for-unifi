@@ -42,9 +42,12 @@ header .rate:first-of-type { margin-right: auto; }
 .up { color: var(--up); }
 canvas { display: block; width: 100%; height: 110px; margin: 8px 0; }
 footer { display: flex; justify-content: space-between; color: var(--muted); }
+footer.meta { margin-top: 2px; }
 footer .label { opacity: 0.8; }
 footer span:not(.label):not(.badge) { color: var(--fg); }
 .badge { margin-left: 4px; padding: 0 5px; border-radius: 6px; background: var(--warn); color: var(--on-warn); font-size: 10px; font-weight: 700; }
 .status { margin-top: 6px; color: var(--warn); font-size: 12px; }
 /* Dim the live values when no rate has arrived for a while (see STALE_MS in main.js). */
 .card.stale canvas, .card.stale .rate { opacity: 0.4; }
+/* Away from the home network: everything shown is the last known value, so dim it all. */
+.card.away canvas, .card.away .rate, .card.away footer { opacity: 0.4; }

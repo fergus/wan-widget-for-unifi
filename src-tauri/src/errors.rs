@@ -22,6 +22,46 @@ impl Peer {
     }
 }
 
+/// A failed request: the plain-language message plus whether the peer could not be
+/// reached at all (timeout or no connection). The poller uses that to spot that the PC
+/// has left the gateway's network; a wrong key, a bad site or a pin mismatch are not that.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Failure {
+    pub message: String,
+    pub unreachable: bool,
+}
+
+impl Failure {
+    pub fn other(message: String) -> Self {
+        Self {
+            message,
+            unreachable: false,
+        }
+    }
+}
+
+impl std::fmt::Display for Failure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl From<Failure> for String {
+    fn from(f: Failure) -> String {
+        f.message
+    }
+}
+
+/// Like `send`, but also records whether the peer was unreachable.
+pub fn send_failure(e: &reqwest::Error, peer: Peer) -> Failure {
+    Failure {
+        message: send(e, peer),
+        unreachable: peer == Peer::Gateway
+            && !pin::mismatch()
+            && (e.is_timeout() || e.is_connect()),
+    }
+}
+
 /// A request that never got an HTTP reply: unreachable, timed out, or TLS refused.
 pub fn send(e: &reqwest::Error, peer: Peer) -> String {
     log::debug!("request to {} failed: {e:?}", peer.name());

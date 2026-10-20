@@ -12,6 +12,8 @@ All gateway calls use the classic UniFi Network local API on UniFi OS
 | Live rates | `GET .../stat/health`, `wan` entry, `rx_bytes-r` / `tx_bytes-r` | Already bytes per second, so no counter-delta maths |
 | Billing timezone | `GET .../stat/sysinfo`, `timezone` | Used unless the timezone setting overrides it, falling back to the PC's zone |
 | Monthly usage | `POST .../stat/report/daily.site` with `wan-rx_bytes`, `wan-tx_bytes`, summed from the cycle start | The controller keeps history while the PC is off. The newest bucket already holds today's partial total, so live rates are not added on top |
+| Latency | `GET .../stat/health`, `www` entry, `latency` (ms) | Measured by the gateway to the internet, not PC to gateway |
+| Time since last WAN disconnect | `GET .../stat/device`, the device with a non-null `wan1` block (the gateway), its `uplink.uptime` in seconds, every 60 s | Confirmed on a UCG Ultra: `uplink.uptime` is the link's age, while the device's own `uptime` is time since boot and `wan1` has no uptime. Shown as "-" if absent |
 | External IP | A configurable public lookup (default `https://api.ipify.org`, every 5 minutes), plus the gateway's WAN IP from `stat/health` | Behind carrier-grade NAT the gateway's WAN address is not the public one |
 
 The classic API is undocumented and may change between UniFi releases. All parsing is
@@ -39,6 +41,8 @@ isolated in `widget-core::unifi` and tested against recorded, sanitised fixtures
 | Secrets | API key in Windows Credential Manager, entered at first run, never in the settings file | Keeps the key out of plain-text config and backups |
 | Key isolation | The UI never calls the gateway; only the Rust process holds the key | The web view cannot leak it |
 | Gateway errors | Health polling backs off up to 60 s; a failed monthly fetch retries after 60 s; the widget dims and says "No recent data" after 15 s without rates | Stays quiet when the gateway is down and recovers on its own |
+| Away from home | After 3 polls with no answer at all (timeout or no connection) **and** a PC address different from the one at the last successful poll, stop polling until the address changes, the user clicks Check now, or settings are saved | Cheap and offline: the address comes from a UDP `connect` that sends nothing. The address check keeps a gateway reboot at home on the normal backoff path. Wrong key, wrong site and certificate changes never count as away |
+
 
 ## Architecture
 

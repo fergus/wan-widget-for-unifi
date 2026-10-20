@@ -1,4 +1,4 @@
-import { pushSample, yMax, formatRate, formatBytes } from "./series.js";
+import { pushSample, yMax, formatRate, formatBytes, formatDuration, formatLatency } from "./series.js";
 import { applyTheme } from "./theme.js";
 
 const MAX_POINTS = 150; // 5 minutes at 2s polling
@@ -68,12 +68,52 @@ function draw() {
 const STALE_MS = 15_000;
 let lastRatesAt = 0;
 
-function onRates({ rx, tx }) {
+function onRates({ rx, tx, latency }) {
+  if (away) return;
   lastRatesAt = Date.now();
   samples = pushSample(samples, { rx, tx }, MAX_POINTS);
   $("rx").textContent = "\u2193 " + formatRate(rx);
   $("tx").textContent = "\u2191 " + formatRate(tx);
+  $("latency").textContent = formatLatency(latency);
   draw();
+}
+
+// Seconds the WAN link had been up when last fetched (every 60 s), and when that was.
+// The display counts on from there so it does not sit still between fetches.
+let uptime = null;
+
+function onUptime({ seconds }) {
+  uptime = typeof seconds === "number" ? { seconds, at: Date.now() } : null;
+  showUptime();
+}
+
+function showUptime(stale = false) {
+  const live = uptime && !away && !stale;
+  $("uptime").textContent = live ? formatDuration(uptime.seconds + (Date.now() - uptime.at) / 1000) : "-";
+}
+
+// Away: the gateway is not reachable from this network, so polling is paused. Keep the
+// last month and IP (dimmed) but drop the live numbers, which would be old.
+let away = false;
+
+function onAway(isAway) {
+  away = isAway;
+  document.querySelector(".card").classList.toggle("away", away);
+  $("away").hidden = !away;
+  if (away) {
+    samples = [];
+    lastRatesAt = 0;
+    $("rx").textContent = "Away";
+    $("tx").textContent = "";
+    $("latency").textContent = "-";
+    $("status").hidden = true;
+    draw();
+  } else {
+    // Back on a network we are polling again; show the usual "waiting" dashes until data lands.
+    $("rx").textContent = "-";
+    $("tx").textContent = "-";
+  }
+  showUptime();
 }
 
 function onMonthly({ rx, tx }) {
@@ -89,6 +129,7 @@ function onIp({ external, wan, cgnat }) {
 }
 
 function onStatus(message) {
+  if (away) return;
   $("status").hidden = !message;
   $("status").textContent = message || "";
 }
@@ -97,6 +138,9 @@ const tauri = window.__TAURI__;
 const openSettings = () => tauri && tauri.core && tauri.core.invoke("open_settings");
 $("gear").addEventListener("click", openSettings);
 $("status").addEventListener("click", openSettings);
+const resumePolling = () => tauri && tauri.core && tauri.core.invoke("resume_polling");
+$("away").addEventListener("click", resumePolling);
+$("away").addEventListener("keydown", (e) => (e.key === "Enter" || e.key === " ") && resumePolling());
 
 if (tauri && tauri.event) {
   // First run: no key stored yet, so go straight to the settings window.
@@ -105,31 +149,40 @@ if (tauri && tauri.event) {
   tauri.event.listen("monthly-usage", (e) => onMonthly(e.payload));
   tauri.event.listen("ip-info", (e) => onIp(e.payload));
   tauri.event.listen("poll-status", (e) => onStatus(e.payload));
+  tauri.event.listen("wan-uptime", (e) => onUptime(e.payload));
+  tauri.event.listen("away", (e) => onAway(e.payload));
   tauri.event.listen("theme", (e) => applyTheme(e.payload));
   tauri.core.invoke("get_settings").then((s) => applyTheme(s.theme));
   // Monthly and IP are only emitted every 5 minutes, so also fetch the latest values.
-  tauri.core.invoke("latest_snapshot").then(({ monthly, ip }) => {
+  tauri.core.invoke("latest_snapshot").then(({ monthly, ip, uptime: up, away: isAway }) => {
     if (monthly) onMonthly(monthly);
     if (ip) onIp(ip);
+    if (up) onUptime(up);
+    if (isAway) onAway(true);
   });
 } else {
   // Plain browser preview: synthetic data so the layout can be checked without a gateway.
   onMonthly({ rx: 412e9, tx: 51e9 });
   onIp({ external: "203.0.113.7", wan: "100.64.10.20", cgnat: true });
+  onUptime({ seconds: 1_049_270 });
+  // Add ?away to the page URL to preview the away state.
+  if (location.search.includes("away")) onAway(true);
   let t = 0;
   setInterval(() => {
     t += 1;
     onRates({
       rx: Math.max(0, 600_000 + 400_000 * Math.sin(t / 6) + Math.random() * 150_000),
       tx: Math.max(0, 150_000 + 90_000 * Math.sin(t / 4) + Math.random() * 40_000),
+      latency: 9 + Math.round(Math.random() * 6),
     });
   }, 500);
 }
 
 setInterval(() => {
-  const stale = Date.now() - lastRatesAt > STALE_MS;
+  const stale = !away && Date.now() - lastRatesAt > STALE_MS;
   document.querySelector(".card").classList.toggle("stale", stale);
   $("stale").hidden = !stale;
+  showUptime(stale);
 }, 1000);
 
 // Keep the window exactly as tall as the card, so no transparent strip shows below it.

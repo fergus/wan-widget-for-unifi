@@ -10,6 +10,8 @@ A small Windows 11 desktop widget that shows, from your UniFi gateway's local AP
 - a live graph of WAN download and upload throughput
 - data used so far in your billing month
 - your public IP address, with a CGNAT badge when the gateway's WAN address differs
+- internet latency and how long the WAN link has been up since its last disconnect
+- an "Away" state that pauses polling when you take the PC off your home network
 
 It sits on top of other windows or pins to the desktop, lives in the tray, and can
 start with Windows.

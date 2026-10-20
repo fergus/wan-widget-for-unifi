@@ -1,6 +1,8 @@
 //! Background polling. Emits events to the UI; the API key never leaves this process.
 
+use std::net::{IpAddr, UdpSocket};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -9,14 +11,44 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use widget_core::{ip, settings::Settings, unifi, usage};
 
-use crate::errors::{self, Peer};
+use crate::errors::{self, Failure, Peer};
 use crate::{config, pin};
 
 const MONTHLY_EVERY: Duration = Duration::from_secs(300);
 const MONTHLY_RETRY: Duration = Duration::from_secs(60);
 const IP_EVERY: Duration = Duration::from_secs(300);
+const UPTIME_EVERY: Duration = Duration::from_secs(60);
+/// Consecutive unreachable polls, with the PC's address changed, before the widget decides
+/// it has left the gateway's network and pauses.
+const AWAY_AFTER: u32 = 3;
 /// Longest wait between health polls while the gateway keeps failing.
 const MAX_BACKOFF_MS: u64 = 60_000;
+
+/// Set by the widget or the tray to leave the away state and poll again at once.
+static RESUME: AtomicBool = AtomicBool::new(false);
+
+pub fn resume() {
+    RESUME.store(true, Ordering::Relaxed);
+}
+
+fn take_resume() -> bool {
+    RESUME.swap(false, Ordering::Relaxed)
+}
+
+/// The PC's outgoing address. Connecting a UDP socket sends nothing; it only makes the OS
+/// pick the route, so this is free and changes whenever the PC joins another network.
+fn local_ip() -> Option<IpAddr> {
+    let sock = UdpSocket::bind("0.0.0.0:0").ok()?;
+    sock.connect("192.0.2.1:9").ok()?;
+    sock.local_addr().ok().map(|a| a.ip())
+}
+
+/// Away means the gateway has gone quiet and the PC's address is not the one it had when
+/// the gateway last answered. Same address, same network: the gateway is down, not us,
+/// so keep retrying with backoff.
+fn should_go_away(unreachable_streak: u32, home: Option<IpAddr>, now: Option<IpAddr>) -> bool {
+    unreachable_streak >= AWAY_AFTER && (home.is_none() || home != now)
+}
 
 /// Poll interval after `failures` consecutive gateway errors: doubles each time, capped.
 fn backoff_ms(base_ms: u64, failures: u32) -> u64 {
@@ -29,6 +61,13 @@ fn backoff_ms(base_ms: u64, failures: u32) -> u64 {
 struct Rates {
     rx: u64,
     tx: u64,
+    latency: Option<u32>,
+}
+
+/// Seconds since the gateway's WAN link last came up, as of when it was fetched.
+#[derive(Serialize, Clone)]
+pub struct Uptime {
+    seconds: Option<u64>,
 }
 
 #[derive(Serialize, Clone)]
@@ -50,12 +89,16 @@ pub struct IpInfo {
 pub struct Latest {
     monthly: Mutex<Option<Monthly>>,
     ip: Mutex<Option<IpInfo>>,
+    uptime: Mutex<Option<Uptime>>,
+    away: AtomicBool,
 }
 
 #[derive(Serialize)]
 pub struct Snapshot {
     monthly: Option<Monthly>,
     ip: Option<IpInfo>,
+    uptime: Option<Uptime>,
+    away: bool,
 }
 
 impl Latest {
@@ -63,6 +106,8 @@ impl Latest {
         Snapshot {
             monthly: self.monthly.lock().ok().and_then(|g| g.clone()),
             ip: self.ip.lock().ok().and_then(|g| g.clone()),
+            uptime: self.uptime.lock().ok().and_then(|g| g.clone()),
+            away: self.away.load(Ordering::Relaxed),
         }
     }
 }
@@ -89,7 +134,7 @@ fn plain_client() -> reqwest::Client {
         .unwrap_or_default()
 }
 
-async fn get_text(c: &reqwest::Client, url: &str, key: Option<&str>) -> Result<String, String> {
+async fn get_text(c: &reqwest::Client, url: &str, key: Option<&str>) -> Result<String, Failure> {
     let mut req = c.get(url);
     if let Some(k) = key {
         req = req.header("X-API-KEY", k);
@@ -100,11 +145,17 @@ async fn get_text(c: &reqwest::Client, url: &str, key: Option<&str>) -> Result<S
     } else {
         Peer::Lookup
     };
-    let resp = req.send().await.map_err(|e| errors::send(&e, peer))?;
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| errors::send_failure(&e, peer))?;
     let code = resp.status();
-    let body = resp.text().await.map_err(|e| errors::send(&e, peer))?;
+    let body = resp
+        .text()
+        .await
+        .map_err(|e| errors::send_failure(&e, peer))?;
     if !code.is_success() {
-        return Err(errors::status(code, peer, &body));
+        return Err(Failure::other(errors::status(code, peer, &body)));
     }
     Ok(body)
 }
@@ -117,6 +168,16 @@ async fn fetch_gateway_tz(
 ) -> Result<Option<String>, String> {
     let body = get_text(c, &unifi::sysinfo_url(&s.gateway_url, &s.site), Some(key)).await?;
     unifi::parse_sysinfo_timezone(&body).map_err(|e| errors::parse(&e))
+}
+
+/// Seconds since the gateway's WAN link last came up (its last disconnect), if it says.
+async fn fetch_wan_uptime(
+    c: &reqwest::Client,
+    s: &Settings,
+    key: &str,
+) -> Result<Option<u64>, String> {
+    let body = get_text(c, &unifi::device_url(&s.gateway_url, &s.site), Some(key)).await?;
+    unifi::parse_wan_uptime(&body).map_err(|e| errors::parse(&e))
 }
 
 async fn fetch_monthly(
@@ -171,11 +232,40 @@ pub async fn test_connection(s: &Settings, key: &str, pin_path: &Path) -> Result
         (None, _) => String::new(),
     };
     Ok(format!(
-        "Connected{}: {} down, {} up{tz_note}",
+        "Connected{}: {} down, {} up{}{tz_note}",
         h.isp_name.map(|n| format!(" to {n}")).unwrap_or_default(),
         errors::rate(h.rx_bytes_per_s),
-        errors::rate(h.tx_bytes_per_s)
+        errors::rate(h.tx_bytes_per_s),
+        h.latency_ms
+            .map(|l| format!(", {l} ms latency"))
+            .unwrap_or_default()
     ))
+}
+
+/// Away from the gateway's network: stop all polling (nothing is sent to the gateway or
+/// the IP lookup) until the PC's address changes, the user presses Check now, or settings
+/// are saved.
+async fn wait_until_back(app: &AppHandle, latest: &Latest) {
+    let from = local_ip();
+    log::info!("gateway unreachable from a new network ({from:?}): paused until it changes");
+    latest.away.store(true, Ordering::Relaxed);
+    let _ = app.emit("poll-status", "");
+    let _ = app.emit("away", true);
+    take_resume();
+    loop {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        crate::tray::sync_icon(app);
+        if take_resume() || config::peek_changed() || pin::take_reset() {
+            log::info!("resuming: asked to check again");
+            break;
+        }
+        if local_ip() != from {
+            log::info!("resuming: network address changed");
+            break;
+        }
+    }
+    latest.away.store(false, Ordering::Relaxed);
+    let _ = app.emit("away", false);
 }
 
 pub async fn run(app: AppHandle) {
@@ -183,6 +273,11 @@ pub async fn run(app: AppHandle) {
     let pin_path: PathBuf = pin::path(&app).unwrap_or_default();
     let mut last_theme: Option<String> = None;
     let mut failures: u32 = 0;
+    // Consecutive polls where the gateway did not answer at all, and this PC's address when
+    // it last did. Together they tell "gateway down" from "PC left the network".
+    let mut unreachable_streak: u32 = 0;
+    let mut home_ip: Option<IpAddr> = None;
+    let mut uptime_due = std::time::Instant::now();
     let mut monthly_due = std::time::Instant::now();
     let mut last_ip: Option<std::time::Instant> = None;
     let mut wan_ip: Option<std::net::IpAddr> = None;
@@ -203,6 +298,7 @@ pub async fn run(app: AppHandle) {
             gateway_tz = None;
             // Billing day or timezone may have changed, so recompute the month now.
             monthly_due = std::time::Instant::now();
+            uptime_due = std::time::Instant::now();
             if last_theme.as_deref() != Some(s.theme.as_str()) {
                 let _ = app.emit("theme", s.theme.clone());
                 last_theme = Some(s.theme.clone());
@@ -233,13 +329,15 @@ pub async fn run(app: AppHandle) {
         let health_url = unifi::health_url(&s.gateway_url, &s.site);
         match get_text(&c, &health_url, Some(&key))
             .await
-            .and_then(|b| unifi::parse_health(&b).map_err(|e| errors::parse(&e)))
+            .and_then(|b| unifi::parse_health(&b).map_err(|e| Failure::other(errors::parse(&e))))
         {
             Ok(h) => {
                 if failures > 0 {
                     log::info!("gateway reachable again after {failures} failed polls");
                 }
                 failures = 0;
+                unreachable_streak = 0;
+                home_ip = local_ip();
                 wan_ip = h.wan_ip;
                 let _ = app.emit("poll-status", "");
                 let _ = app.emit(
@@ -247,8 +345,22 @@ pub async fn run(app: AppHandle) {
                     Rates {
                         rx: h.rx_bytes_per_s,
                         tx: h.tx_bytes_per_s,
+                        latency: h.latency_ms,
                     },
                 );
+                if std::time::Instant::now() >= uptime_due {
+                    uptime_due = std::time::Instant::now() + UPTIME_EVERY;
+                    match fetch_wan_uptime(&c, &s, &key).await {
+                        Ok(seconds) => {
+                            let u = Uptime { seconds };
+                            if let Ok(mut g) = latest.uptime.lock() {
+                                *g = Some(u.clone());
+                            }
+                            let _ = app.emit("wan-uptime", u);
+                        }
+                        Err(e) => log::warn!("wan uptime: {e}"),
+                    }
+                }
             }
             Err(e) => {
                 failures = failures.saturating_add(1);
@@ -256,7 +368,23 @@ pub async fn run(app: AppHandle) {
                 if failures == 1 {
                     log::warn!("live rates: {e}");
                 }
-                let _ = app.emit("poll-status", e);
+                unreachable_streak = if e.unreachable {
+                    unreachable_streak.saturating_add(1)
+                } else {
+                    0
+                };
+                if should_go_away(unreachable_streak, home_ip, local_ip()) {
+                    wait_until_back(&app, &latest).await;
+                    // Connections and cached values are from the other network.
+                    failures = 0;
+                    unreachable_streak = 0;
+                    gateway = None;
+                    monthly_due = std::time::Instant::now();
+                    uptime_due = std::time::Instant::now();
+                    last_ip = None;
+                    continue;
+                }
+                let _ = app.emit("poll-status", e.message);
             }
         }
 
@@ -334,7 +462,30 @@ pub async fn run(app: AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::backoff_ms;
+    use super::{backoff_ms, should_go_away};
+    use std::net::IpAddr;
+
+    fn ip(s: &str) -> Option<IpAddr> {
+        Some(s.parse().unwrap())
+    }
+
+    #[test]
+    fn away_needs_a_run_of_failures_and_a_changed_address() {
+        let home = ip("192.168.1.20");
+        // Gateway down at home: same address, keep backing off.
+        assert!(!should_go_away(10, home, home));
+        // Left the network, but not yet sure it is not a blip.
+        assert!(!should_go_away(2, home, ip("10.0.0.5")));
+        assert!(should_go_away(3, home, ip("10.0.0.5")));
+        // No network at all counts as a change.
+        assert!(should_go_away(3, home, None));
+    }
+
+    #[test]
+    fn away_when_the_gateway_never_answered_this_run() {
+        assert!(should_go_away(3, None, ip("10.0.0.5")));
+        assert!(!should_go_away(2, None, ip("10.0.0.5")));
+    }
 
     #[test]
     fn backoff_doubles_then_caps_at_a_minute() {

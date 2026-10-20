@@ -12,6 +12,7 @@ use winreg::RegKey;
 
 const ID_TOGGLE: &str = "toggle";
 const ID_CLICK_THROUGH: &str = "click_through";
+const ID_CHECK_NOW: &str = "check_now";
 const ID_SETTINGS: &str = "settings";
 const ID_AUTOSTART: &str = "autostart";
 const ID_PIN: &str = "pin";
@@ -103,6 +104,7 @@ pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         false,
         None::<&str>,
     )?;
+    let check_now = MenuItem::with_id(app, ID_CHECK_NOW, "Check gateway now", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, ID_SETTINGS, "Settings...", true, None::<&str>)?;
     let autostart_on = app.autolaunch().is_enabled().unwrap_or(false);
     let autostart = CheckMenuItem::with_id(
@@ -130,6 +132,7 @@ pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             &toggle,
             &click_through,
             &pin,
+            &check_now,
             &settings,
             &autostart,
             &update,
@@ -168,6 +171,7 @@ pub fn build(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                     crate::window_state::apply_pin(&w, want);
                 }
             }
+            ID_CHECK_NOW => crate::poller::resume(),
             ID_SETTINGS => {
                 let _ = crate::show_settings(app);
             }

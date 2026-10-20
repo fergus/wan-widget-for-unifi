@@ -3,6 +3,16 @@
 All notable changes to WAN Widget for UniFi. Versions follow
 [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+- Latency (gateway to internet, as measured by the gateway) and how long the WAN link
+  has been up since its last disconnect.
+- Away mode: when the PC leaves the gateway's network, the widget says "Away", dims the
+  last values and stops polling entirely, including the IP lookup. It resumes when the
+  PC's network address changes, when you click the banner or choose **Check gateway
+  now** in the tray, or when you save settings. A gateway that is down while the PC is
+  still on the home network keeps the existing retry-with-backoff behaviour.
+
 ## 0.1.1 - 2026-10-20
 
 - The log now records the result of each update check, so update problems can be

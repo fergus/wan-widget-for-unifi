@@ -76,6 +76,12 @@ fn latest_snapshot(latest: tauri::State<Arc<poller::Latest>>) -> poller::Snapsho
     latest.snapshot()
 }
 
+/// Leaves the away state and polls the gateway again straight away.
+#[tauri::command]
+fn resume_polling() {
+    poller::resume();
+}
+
 #[tauri::command]
 fn get_autostart(app: AppHandle) -> bool {
     app.autolaunch().is_enabled().unwrap_or(false)
@@ -175,6 +181,7 @@ fn main() {
             get_pinned,
             set_pinned,
             latest_snapshot,
+            resume_polling,
             forget_pin,
             app_version,
             check_update,

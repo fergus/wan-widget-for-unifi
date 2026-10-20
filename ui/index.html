@@ -21,6 +21,11 @@
         <span id="cgnat" class="badge" hidden title="Gateway WAN address differs from your public IP">CGNAT</span>
       </div>
     </footer>
+    <footer class="meta">
+      <div><span class="label">Latency</span> <span id="latency" title="Gateway to internet, measured by the gateway">-</span></div>
+      <div><span class="label">Connected for</span> <span id="uptime" title="Time since the last WAN disconnect">-</span></div>
+    </footer>
+    <div id="away" class="status" role="button" tabindex="0" hidden>Away from your home network. Paused. Click to check again</div>
     <div id="status" class="status" hidden></div>
     <div id="stale" class="status" hidden>No recent data</div>
   </main>

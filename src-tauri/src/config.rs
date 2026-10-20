@@ -19,6 +19,12 @@ pub fn take_changed() -> bool {
     CHANGED.swap(false, Ordering::Relaxed)
 }
 
+/// True while a save is waiting to be applied, without consuming it. The away wait uses
+/// this to wake up and leave the flag for the main loop to act on.
+pub fn peek_changed() -> bool {
+    CHANGED.load(Ordering::Relaxed)
+}
+
 fn settings_path(app: &AppHandle) -> Option<PathBuf> {
     app.path()
         .app_config_dir()
