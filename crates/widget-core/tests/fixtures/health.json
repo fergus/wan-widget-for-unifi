@@ -1,6 +1,14 @@
 {"meta":{"rc":"ok"},"data":[
 {"subsystem":"wlan","num_user":28,"tx_bytes-r":438291,"rx_bytes-r":219544,"status":"ok"},
-{"subsystem":"wan","status":"ok","wan_ip":"100.64.10.20","tx_bytes-r":356527,"rx_bytes-r":513102,"gw_name":"UCG Ultra","isp_name":"ExampleISP"},
-{"subsystem":"www","status":"ok","tx_bytes-r":356527,"rx_bytes-r":513102,"latency":9},
+{"subsystem":"wan","status":"ok","wan_ip":"100.64.10.20","tx_bytes-r":356527,"rx_bytes-r":513102,"gw_name":"UCG Ultra","isp_name":"ExampleISP",
+ "gw_system-stats":{"cpu":"37.9","mem":"52.7","uptime":"3236461"},
+ "uptime_stats":{"WAN":{
+  "alerting_monitors":[{"availability":100.0,"latency_average":9,"target":"ping.ui.com","type":"icmp"}],
+  "availability":99.72220000624657,"latency_average":9,"time_period":86400,"uptime":404424,
+  "monitors":[
+   {"availability":100.0,"latency_average":10,"target":"www.microsoft.com","type":"icmp"},
+   {"availability":100.0,"latency_average":12,"target":"google.com","type":"icmp"},
+   {"availability":100.0,"latency_average":7,"target":"1.1.1.1","type":"icmp"}]}}},
+{"subsystem":"www","status":"ok","tx_bytes-r":356527,"rx_bytes-r":513102,"latency":9,"uptime":107436,"drops":3},
 {"subsystem":"vpn","status":"unknown"}
 ]}

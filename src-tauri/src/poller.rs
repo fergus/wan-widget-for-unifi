@@ -62,12 +62,24 @@ struct Rates {
     rx: u64,
     tx: u64,
     latency: Option<u32>,
+    monitors: Vec<MonitorOut>,
+    availability_pct: Option<f64>,
+    availability_period_s: Option<u64>,
 }
 
-/// Seconds since the gateway's WAN link last came up, as of when it was fetched.
+#[derive(Serialize, Clone)]
+struct MonitorOut {
+    target: String,
+    latency: Option<u32>,
+}
+
+/// Seconds since the gateway's WAN link last came up, and since the gateway booted, as of
+/// when they were fetched.
 #[derive(Serialize, Clone)]
 pub struct Uptime {
     seconds: Option<u64>,
+    device_seconds: Option<u64>,
+    isp: Option<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -170,14 +182,14 @@ async fn fetch_gateway_tz(
     unifi::parse_sysinfo_timezone(&body).map_err(|e| errors::parse(&e))
 }
 
-/// Seconds since the gateway's WAN link last came up (its last disconnect), if it says.
-async fn fetch_wan_uptime(
+/// The gateway's WAN link and boot uptimes, as far as it reports them.
+async fn fetch_uptime(
     c: &reqwest::Client,
     s: &Settings,
     key: &str,
-) -> Result<Option<u64>, String> {
+) -> Result<unifi::GatewayUptime, String> {
     let body = get_text(c, &unifi::device_url(&s.gateway_url, &s.site), Some(key)).await?;
-    unifi::parse_wan_uptime(&body).map_err(|e| errors::parse(&e))
+    unifi::parse_gateway_uptime(&body).map_err(|e| errors::parse(&e))
 }
 
 async fn fetch_monthly(
@@ -346,13 +358,27 @@ pub async fn run(app: AppHandle) {
                         rx: h.rx_bytes_per_s,
                         tx: h.tx_bytes_per_s,
                         latency: h.latency_ms,
+                        monitors: h
+                            .monitors
+                            .iter()
+                            .map(|m| MonitorOut {
+                                target: m.target.clone(),
+                                latency: m.latency_ms,
+                            })
+                            .collect(),
+                        availability_pct: h.availability_pct,
+                        availability_period_s: h.availability_period_s,
                     },
                 );
                 if std::time::Instant::now() >= uptime_due {
                     uptime_due = std::time::Instant::now() + UPTIME_EVERY;
-                    match fetch_wan_uptime(&c, &s, &key).await {
-                        Ok(seconds) => {
-                            let u = Uptime { seconds };
+                    match fetch_uptime(&c, &s, &key).await {
+                        Ok(g) => {
+                            let u = Uptime {
+                                seconds: g.wan_s,
+                                device_seconds: g.device_s,
+                                isp: h.isp_name.clone(),
+                            };
                             if let Ok(mut g) = latest.uptime.lock() {
                                 *g = Some(u.clone());
                             }

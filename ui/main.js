@@ -1,4 +1,7 @@
-import { pushSample, yMax, formatRate, formatBytes, formatDuration, formatLatency } from "./series.js";
+import {
+  pushSample, yMax, formatRate, formatBytes, formatDuration, formatLatency,
+  latencyStats, monitorName, formatPeriod,
+} from "./series.js";
 import { applyTheme } from "./theme.js";
 
 const MAX_POINTS = 150; // 5 minutes at 2s polling
@@ -68,28 +71,74 @@ function draw() {
 const STALE_MS = 15_000;
 let lastRatesAt = 0;
 
-function onRates({ rx, tx, latency }) {
+// Recent latency readings, for the tooltip's min / average / max.
+let latencies = [];
+
+function onRates({ rx, tx, latency, monitors, availability_pct: availability, availability_period_s: period }) {
   if (away) return;
   lastRatesAt = Date.now();
   samples = pushSample(samples, { rx, tx }, MAX_POINTS);
+  latencies = pushSample(latencies, { v: typeof latency === "number" ? latency : null, t: Date.now() }, MAX_POINTS);
   $("rx").textContent = "\u2193 " + formatRate(rx);
   $("tx").textContent = "\u2191 " + formatRate(tx);
   $("latency").textContent = formatLatency(latency);
+  showLatencyTip(monitors || [], availability, period);
   draw();
+}
+
+/** Per-target latency, the recent range and availability. Only rewritten when it changes. */
+function showLatencyTip(monitors, availability, period) {
+  const lines = ["Latency from the gateway to the internet, measured by the gateway"];
+  for (const m of monitors) lines.push(monitorName(m.target) + ": " + formatLatency(m.latency));
+  const st = latencyStats(latencies.map((l) => l.v));
+  if (st) {
+    const mins = Math.max(1, Math.round((Date.now() - latencies[0].t) / 60_000));
+    lines.push("Last " + mins + " min: avg " + st.avg + ", min " + st.min + ", max " + st.max + " ms");
+  }
+  if (typeof availability === "number") {
+    lines.push("Availability " + availability.toFixed(2) + "%" + (period ? " over the last " + formatPeriod(period) : ""));
+  }
+  const tip = lines.join("\n");
+  if ($("latency").title !== tip) $("latency").title = tip;
 }
 
 // Seconds the WAN link had been up when last fetched (every 60 s), and when that was.
 // The display counts on from there so it does not sit still between fetches.
 let uptime = null;
 
-function onUptime({ seconds }) {
-  uptime = typeof seconds === "number" ? { seconds, at: Date.now() } : null;
-  showUptime();
+function onUptime({ seconds, device_seconds: deviceSeconds, isp }) {
+  const num = (n) => (typeof n === "number" ? n : null);
+  uptime = num(seconds) === null ? null : { seconds, deviceSeconds: num(deviceSeconds), isp: isp || null, at: Date.now() };
+  showUptime(false, true);
 }
 
-function showUptime(stale = false) {
-  const live = uptime && !away && !stale;
-  $("uptime").textContent = live ? formatDuration(uptime.seconds + (Date.now() - uptime.at) / 1000) : "-";
+const WHEN = { dateStyle: "medium", timeStyle: "short" };
+
+/** "WAN link up for 29h 33m (since 19 Oct 2026, 6:12 am)", or null if unknown. */
+function since(label, seconds, elapsed) {
+  if (seconds === null) return null;
+  const s = seconds + elapsed;
+  return label + " " + formatDuration(s) + " (since " + new Date(Date.now() - s * 1000).toLocaleString([], WHEN) + ")";
+}
+
+function showUptime(stale = false, refresh = false) {
+  const el = $("uptime");
+  if (!uptime || away || stale) {
+    el.textContent = "-";
+    el.removeAttribute("title"); // fall back to the field's general tooltip
+    return;
+  }
+  const elapsed = (Date.now() - uptime.at) / 1000;
+  const text = formatDuration(uptime.seconds + elapsed);
+  // The tooltip changes with the text, i.e. once a minute, so it never flickers.
+  if (refresh || el.textContent !== text) {
+    el.textContent = text;
+    el.title = [
+      uptime.isp && "ISP: " + uptime.isp,
+      since("WAN link up for", uptime.seconds, elapsed),
+      since("Gateway up for", uptime.deviceSeconds, elapsed),
+    ].filter(Boolean).join("\n");
+  }
 }
 
 // Away: the gateway is not reachable from this network, so polling is paused. Keep the
@@ -105,7 +154,9 @@ function onAway(isAway) {
     lastRatesAt = 0;
     $("rx").textContent = "Away";
     $("tx").textContent = "";
+    latencies = [];
     $("latency").textContent = "-";
+    $("latency").removeAttribute("title"); // fall back to the field's general tooltip
     $("status").hidden = true;
     draw();
   } else {
@@ -164,7 +215,7 @@ if (tauri && tauri.event) {
   // Plain browser preview: synthetic data so the layout can be checked without a gateway.
   onMonthly({ rx: 412e9, tx: 51e9 });
   onIp({ external: "203.0.113.7", wan: "100.64.10.20", cgnat: true });
-  onUptime({ seconds: 1_049_270 });
+  onUptime({ seconds: 106_380, device_seconds: 3_235_463, isp: "ExampleISP" });
   // Add ?away to the page URL to preview the away state.
   if (location.search.includes("away")) onAway(true);
   let t = 0;
@@ -174,6 +225,13 @@ if (tauri && tauri.event) {
       rx: Math.max(0, 600_000 + 400_000 * Math.sin(t / 6) + Math.random() * 150_000),
       tx: Math.max(0, 150_000 + 90_000 * Math.sin(t / 4) + Math.random() * 40_000),
       latency: 9 + Math.round(Math.random() * 6),
+      monitors: [
+        { target: "www.microsoft.com", latency: 10 },
+        { target: "google.com", latency: 12 },
+        { target: "1.1.1.1", latency: 7 },
+      ],
+      availability_pct: 99.7222,
+      availability_period_s: 86400,
     });
   }, 500);
 }

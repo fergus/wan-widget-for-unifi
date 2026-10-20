@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pushSample, yMax, formatRate, formatBytes, formatDuration, formatLatency } from "./series.js";
+import { pushSample, yMax, formatRate, formatBytes, formatDuration, formatLatency, latencyStats, monitorName, formatPeriod } from "./series.js";
 
 test("pushSample caps the buffer and drops the oldest", () => {
   let buf = [];
@@ -55,4 +55,24 @@ test("formatLatency rounds and falls back to a dash", () => {
   assert.equal(formatLatency(0), "0 ms");
   assert.equal(formatLatency(null), "-");
   assert.equal(formatLatency(undefined), "-");
+});
+
+test("latencyStats summarises numbers and ignores gaps", () => {
+  assert.equal(latencyStats([]), null);
+  assert.equal(latencyStats([null, undefined]), null);
+  assert.deepEqual(latencyStats([8, null, 14, 11]), { avg: 11, min: 8, max: 14 });
+});
+
+test("monitorName uses the names the UniFi app shows", () => {
+  assert.equal(monitorName("www.microsoft.com"), "Microsoft");
+  assert.equal(monitorName("google.com"), "Google");
+  assert.equal(monitorName("1.1.1.1"), "Cloudflare");
+  assert.equal(monitorName("ping.ui.com"), "ping.ui.com");
+});
+
+test("formatPeriod picks hours or minutes", () => {
+  assert.equal(formatPeriod(86400), "24 hours");
+  assert.equal(formatPeriod(3600), "1 hour");
+  assert.equal(formatPeriod(90 * 60), "2 hours");
+  assert.equal(formatPeriod(300), "5 minutes");
 });

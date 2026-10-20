@@ -64,6 +64,7 @@ struct DeviceEntry {
     /// Only the gateway has a `wan1` block (it is null on switches and access points).
     wan1: Option<Wan1>,
     uplink: Option<Uplink>,
+    uptime: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -74,17 +75,28 @@ struct Uplink {
     uptime: Option<f64>,
 }
 
-/// Seconds the gateway's WAN link has been up, i.e. the time since its last disconnect,
-/// from `stat/device`. On the gateway (the device with a `wan1` block) this is
-/// `uplink.uptime`; the device's own `uptime` is time since it booted, which is not the
-/// same. None if the gateway does not report it.
-pub fn parse_wan_uptime(body: &str) -> Result<Option<u64>, ParseError> {
+/// Uptimes of the gateway, in seconds, from `stat/device`.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct GatewayUptime {
+    /// How long the WAN link has been up: the time since its last disconnect.
+    pub wan_s: Option<u64>,
+    /// How long the gateway itself has run since it last booted.
+    pub device_s: Option<u64>,
+}
+
+/// Finds the gateway (the device with a `wan1` block) and reads its link uptime
+/// (`uplink.uptime`) and its own boot uptime (`uptime`). Both are None if no device is
+/// a gateway or it does not report them.
+pub fn parse_gateway_uptime(body: &str) -> Result<GatewayUptime, ParseError> {
+    let secs = |v: f64| v.max(0.0) as u64;
     Ok(parse_envelope::<DeviceEntry>(body)?
         .into_iter()
         .find(|d| d.wan1.is_some())
-        .and_then(|d| d.uplink)
-        .and_then(|u| u.uptime)
-        .map(|u| u.max(0.0) as u64))
+        .map(|d| GatewayUptime {
+            wan_s: d.uplink.and_then(|u| u.uptime).map(secs),
+            device_s: d.uptime.map(secs),
+        })
+        .unwrap_or_default())
 }
 
 #[derive(Deserialize)]
@@ -110,12 +122,46 @@ pub struct WanHealth {
     pub isp_name: Option<String>,
     /// Gateway-to-internet latency in ms, measured by the gateway (the `www` subsystem).
     pub latency_ms: Option<u32>,
+    /// The gateway's WAN monitors (the targets the UniFi app lists), with their latency.
+    pub monitors: Vec<Monitor>,
+    /// WAN availability over `availability_period_s`, as a percentage.
+    pub availability_pct: Option<f64>,
+    pub availability_period_s: Option<u64>,
+}
+
+/// One WAN monitor target and its average latency.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Monitor {
+    /// What the gateway pings or queries, e.g. "google.com" or "1.1.1.1".
+    pub target: String,
+    pub latency_ms: Option<u32>,
+}
+
+#[derive(Deserialize, Default)]
+struct UptimeStats {
+    #[serde(rename = "WAN")]
+    wan: Option<WanStats>,
+}
+
+#[derive(Deserialize, Default)]
+struct WanStats {
+    #[serde(default)]
+    monitors: Vec<MonitorEntry>,
+    availability: Option<f64>,
+    time_period: Option<u64>,
+}
+
+#[derive(Deserialize)]
+struct MonitorEntry {
+    target: String,
+    latency_average: Option<f64>,
 }
 
 #[derive(Deserialize)]
 struct HealthEntry {
     subsystem: String,
     latency: Option<f64>,
+    uptime_stats: Option<UptimeStats>,
     #[serde(rename = "rx_bytes-r")]
     rx: Option<f64>,
     #[serde(rename = "tx_bytes-r")]
@@ -135,12 +181,23 @@ pub fn parse_health(body: &str) -> Result<WanHealth, ParseError> {
         .into_iter()
         .find(|e| e.subsystem == "wan")
         .ok_or(ParseError::NoWan)?;
+    let stats = wan.uptime_stats.and_then(|u| u.wan).unwrap_or_default();
     Ok(WanHealth {
         rx_bytes_per_s: wan.rx.unwrap_or(0.0).max(0.0) as u64,
         tx_bytes_per_s: wan.tx.unwrap_or(0.0).max(0.0) as u64,
         wan_ip: wan.wan_ip.and_then(|s| s.parse().ok()),
         isp_name: wan.isp_name,
         latency_ms,
+        monitors: stats
+            .monitors
+            .into_iter()
+            .map(|m| Monitor {
+                target: m.target,
+                latency_ms: m.latency_average.map(|l| l.max(0.0).round() as u32),
+            })
+            .collect(),
+        availability_pct: stats.availability,
+        availability_period_s: stats.time_period,
     })
 }
 
@@ -225,6 +282,35 @@ mod tests {
     }
 
     #[test]
+    fn health_lists_the_wan_monitors_and_availability() {
+        let h = parse_health(HEALTH).unwrap();
+        let seen: Vec<_> = h
+            .monitors
+            .iter()
+            .map(|m| (m.target.as_str(), m.latency_ms))
+            .collect();
+        // The three the UniFi app shows, not the separate alerting monitors.
+        assert_eq!(
+            seen,
+            [
+                ("www.microsoft.com", Some(10)),
+                ("google.com", Some(12)),
+                ("1.1.1.1", Some(7))
+            ]
+        );
+        assert!((h.availability_pct.unwrap() - 99.7222).abs() < 0.001);
+        assert_eq!(h.availability_period_s, Some(86_400));
+    }
+
+    #[test]
+    fn missing_uptime_stats_means_no_monitors() {
+        let body = r#"{"meta":{"rc":"ok"},"data":[{"subsystem":"wan"}]}"#;
+        let h = parse_health(body).unwrap();
+        assert!(h.monitors.is_empty());
+        assert_eq!((h.availability_pct, h.availability_period_s), (None, None));
+    }
+
+    #[test]
     fn latency_is_absent_without_a_www_subsystem() {
         let body = r#"{"meta":{"rc":"ok"},"data":[{"subsystem":"wan"}]}"#;
         assert_eq!(parse_health(body).unwrap().latency_ms, None);
@@ -234,7 +320,13 @@ mod tests {
     fn wan_uptime_comes_from_the_gateway_not_other_devices() {
         let body = include_str!("../tests/fixtures/device.json");
         // Recorded from a UCG Ultra: link up 106380 s, device up 3235463 s.
-        assert_eq!(parse_wan_uptime(body), Ok(Some(106_380)));
+        assert_eq!(
+            parse_gateway_uptime(body),
+            Ok(GatewayUptime {
+                wan_s: Some(106_380),
+                device_s: Some(3_235_463)
+            })
+        );
         assert_eq!(
             device_url("https://192.168.1.1/", "default"),
             "https://192.168.1.1/proxy/network/api/s/default/stat/device"
@@ -244,13 +336,15 @@ mod tests {
     #[test]
     fn wan_uptime_is_none_when_no_device_reports_it() {
         // A switch's uplink.uptime must not be mistaken for the WAN link's.
-        let body =
-            r#"{"meta":{"rc":"ok"},"data":[{"type":"usw","wan1":null,"uplink":{"uptime":5}}]}"#;
-        assert_eq!(parse_wan_uptime(body), Ok(None));
+        let body = r#"{"meta":{"rc":"ok"},"data":[{"type":"usw","uptime":9,"wan1":null,"uplink":{"uptime":5}}]}"#;
+        assert_eq!(parse_gateway_uptime(body), Ok(GatewayUptime::default()));
         let no_uptime = r#"{"meta":{"rc":"ok"},"data":[{"type":"udm","wan1":{},"uplink":{}}]}"#;
-        assert_eq!(parse_wan_uptime(no_uptime), Ok(None));
+        assert_eq!(
+            parse_gateway_uptime(no_uptime),
+            Ok(GatewayUptime::default())
+        );
         assert!(matches!(
-            parse_wan_uptime(ERROR),
+            parse_gateway_uptime(ERROR),
             Err(ParseError::Controller(_))
         ));
     }
