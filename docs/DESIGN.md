@@ -12,7 +12,8 @@ All gateway calls use the classic UniFi Network local API on UniFi OS
 | Live rates | `GET .../stat/health`, `wan` entry, `rx_bytes-r` / `tx_bytes-r` | Already bytes per second, so no counter-delta maths |
 | Billing timezone | `GET .../stat/sysinfo`, `timezone` | Used unless the timezone setting overrides it, falling back to the PC's zone |
 | Monthly usage | `POST .../stat/report/daily.site` with `wan-rx_bytes`, `wan-tx_bytes`, summed from the cycle start | The controller keeps history while the PC is off. The newest bucket already holds today's partial total, so live rates are not added on top |
-| Latency | `GET .../stat/health`, `www` entry, `latency` (ms) | Measured by the gateway to the internet, not PC to gateway |
+| Latency | `GET .../stat/health`, `www` entry, `latency` (ms) | Measured by the gateway to the internet, not PC to gateway. Equals `wan.uptime_stats.WAN.latency_average` |
+| Latency per target, availability | `stat/health`, `wan` entry, `uptime_stats.WAN.monitors[]` (`target`, `latency_average`) and `uptime_stats.WAN.availability` over `time_period` (24 h) | The three targets the UniFi app lists (Microsoft, Google, Cloudflare). `alerting_monitors` are separate and ignored. Recorded from a UCG Ultra on gateway firmware 5.1 |
 | Time since last WAN disconnect | `GET .../stat/device`, the device with a non-null `wan1` block (the gateway), its `uplink.uptime` in seconds, every 60 s | Confirmed on a UCG Ultra: `uplink.uptime` is the link's age, while the device's own `uptime` is time since boot and `wan1` has no uptime. Shown as "-" if absent |
 | External IP | A configurable public lookup (default `https://api.ipify.org`, every 5 minutes), plus the gateway's WAN IP from `stat/health` | Behind carrier-grade NAT the gateway's WAN address is not the public one |
 

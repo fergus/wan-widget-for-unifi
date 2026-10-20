@@ -51,3 +51,33 @@ export function formatDuration(seconds) {
 export function formatLatency(ms) {
   return typeof ms === "number" ? Math.round(ms) + " ms" : "-";
 }
+
+/** Average, min and max of the numbers in `values` (non-numbers ignored), or null if none. */
+export function latencyStats(values) {
+  const v = values.filter((n) => typeof n === "number");
+  if (v.length === 0) return null;
+  return {
+    avg: Math.round(v.reduce((a, b) => a + b, 0) / v.length),
+    min: Math.min(...v),
+    max: Math.max(...v),
+  };
+}
+
+/** The provider the UniFi app names for a monitor target, else the target itself. */
+export function monitorName(target) {
+  const t = String(target).toLowerCase();
+  if (t.includes("microsoft")) return "Microsoft";
+  if (t.includes("google")) return "Google";
+  if (t === "1.1.1.1" || t.includes("cloudflare")) return "Cloudflare";
+  return String(target);
+}
+
+/** A window length in seconds as "24 hours", "90 minutes" or "1 hour". */
+export function formatPeriod(seconds) {
+  if (seconds >= 3600) {
+    const h = Math.round(seconds / 3600);
+    return h + (h === 1 ? " hour" : " hours");
+  }
+  const m = Math.max(1, Math.round(seconds / 60));
+  return m + (m === 1 ? " minute" : " minutes");
+}

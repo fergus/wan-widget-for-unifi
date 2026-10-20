@@ -15,15 +15,15 @@
     </header>
     <canvas id="graph" width="320" height="110"></canvas>
     <footer>
-      <div><span class="label">Month</span> <span id="month">-</span></div>
-      <div>
+      <div title="Data used so far in this billing month (download plus upload). Hover the figure for the split"><span class="label">Month</span> <span id="month">-</span></div>
+      <div title="Time since the WAN link last disconnected. Hover the figure for when that was and how long the gateway itself has been running"><span class="label">Uptime</span> <span id="uptime">-</span></div>
+    </footer>
+    <footer class="meta">
+      <div title="Your public IP address. Hover the address for the gateway's WAN address too">
         <span class="label">IP</span> <span id="ip">-</span>
         <span id="cgnat" class="badge" hidden title="Gateway WAN address differs from your public IP">CGNAT</span>
       </div>
-    </footer>
-    <footer class="meta">
-      <div><span class="label">Latency</span> <span id="latency" title="Gateway to internet, measured by the gateway">-</span></div>
-      <div><span class="label">Connected for</span> <span id="uptime" title="Time since the last WAN disconnect">-</span></div>
+      <div title="Latency from the gateway to the internet, measured by the gateway. Hover the figure for each monitor target, the recent range and availability"><span class="label">Latency</span> <span id="latency">-</span></div>
     </footer>
     <div id="away" class="status" role="button" tabindex="0" hidden>Away from your home network. Paused. Click to check again</div>
     <div id="status" class="status" hidden></div>
