@@ -16,10 +16,10 @@
     <div class="graph">
       <canvas id="graph" width="320" height="110" aria-label="Download and upload throughput graph"></canvas>
       <div id="views" role="group" aria-label="Graph time window">
-        <button type="button" data-view="5m" title="Last 5 minutes, live">5m</button>
-        <button type="button" data-view="1h" title="Last hour, live (since the widget started)">1h</button>
-        <button type="button" data-view="24h" title="Last 24 hours, 5-minute averages from the gateway">24h</button>
-        <button type="button" data-view="7d" title="Last 7 days, hourly averages from the gateway">7d</button>
+        <button type="button" data-view="5m" title="Last 5 minutes, live: the gateway's current rate every 2 seconds, so short bursts show at full height">5m</button>
+        <button type="button" data-view="1h" title="Last hour, live like 5m, since the widget started">1h</button>
+        <button type="button" data-view="24h" title="Last 24 hours, 5-minute averages from the gateway, so short bursts peak lower than on 5m and 1h">24h</button>
+        <button type="button" data-view="7d" title="Last 7 days, hourly averages from the gateway, so peaks are lower again than on 24h">7d</button>
       </div>
       <div id="readout" hidden></div>
     </div>

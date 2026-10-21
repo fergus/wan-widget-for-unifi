@@ -72,6 +72,28 @@ Latency and uptime are measured by the gateway, so they describe your internet
 connection rather than your Wi-Fi. Per-target latency and availability need a gateway
 that reports `uptime_stats`; without it you still get the overall latency.
 
+### Reading the graph
+
+The buttons over the graph pick how far back it looks. The windows measure throughput
+in different ways, so the same burst of traffic peaks at a different height in each:
+
+| Window | Each point on the line | Peaks |
+|---|---|---|
+| 5m, 1h | The gateway's current rate, read every 2 seconds while the widget runs | Highest. Short bursts show at close to their real speed |
+| 24h | The average over 5 minutes, from the gateway's own history | Lower. A burst is spread over its 5 minutes |
+| 7d | The average over an hour, from the gateway's own history | Lowest. A burst is spread over its hour |
+
+For example, a 30-second download at 120 Mbit/s, with the connection idle otherwise,
+shows at about 120 Mbit/s on 5m and 1h, about 12 Mbit/s on 24h (30 of 300 seconds),
+and about 1 Mbit/s on 7d (30 of 3,600 seconds). Nothing is missing: the gateway only
+keeps averages for the longer periods. On a real day the gap is smaller but still clear:
+on a UCG Ultra, the busiest 5 minutes averaged 124 Mbit/s and the busiest hour 63 Mbit/s.
+
+The scale fits each window's own highest point, so read the labels rather than
+comparing line heights between windows. The 1h window only covers the time since the
+widget started. The month's data total is unaffected: it counts every byte, whichever
+window you look at.
+
 The tray menu (left-click the icon to show or hide the widget) has Click-through, Pin
 to desktop, Check gateway now, Settings, Start with Windows and Check for updates.
 
