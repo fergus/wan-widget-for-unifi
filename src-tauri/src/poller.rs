@@ -201,16 +201,16 @@ async fn fetch_uptime(
     unifi::parse_gateway_uptime(&body).map_err(|e| errors::parse(&e))
 }
 
-async fn fetch_monthly(
+/// POSTs a `stat/report/*.site` request for WAN bytes between two times and returns
+/// the buckets. Daily, hourly and 5-minute reports share the request and reply.
+async fn fetch_report(
     c: &reqwest::Client,
-    s: &Settings,
+    url: String,
     key: &str,
-    tz: widget_core::Tz,
-) -> Result<Monthly, String> {
-    let now = Utc::now();
-    let start = usage::cycle_start(now, s.billing_day, tz);
-    let url = unifi::daily_report_url(&s.gateway_url, &s.site);
-    let body = unifi::daily_report_request(start.timestamp_millis(), now.timestamp_millis());
+    start_ms: i64,
+    end_ms: i64,
+) -> Result<Vec<unifi::DayBucket>, String> {
+    let body = unifi::daily_report_request(start_ms, end_ms);
     let resp = c
         .post(url)
         .header("X-API-KEY", key)
@@ -227,12 +227,69 @@ async fn fetch_monthly(
     if !code.is_success() {
         return Err(errors::status(code, Peer::Gateway, &text));
     }
-    let buckets = unifi::parse_daily_report(&text).map_err(|e| errors::parse(&e))?;
+    unifi::parse_daily_report(&text).map_err(|e| errors::parse(&e))
+}
+
+async fn fetch_monthly(
+    c: &reqwest::Client,
+    s: &Settings,
+    key: &str,
+    tz: widget_core::Tz,
+) -> Result<Monthly, String> {
+    let now = Utc::now();
+    let start = usage::cycle_start(now, s.billing_day, tz);
+    let url = unifi::daily_report_url(&s.gateway_url, &s.site);
+    let buckets = fetch_report(
+        c,
+        url,
+        key,
+        start.timestamp_millis(),
+        now.timestamp_millis(),
+    )
+    .await?;
     let t = usage::monthly_totals(&buckets, start);
     Ok(Monthly {
         rx: t.rx_bytes,
         tx: t.tx_bytes,
     })
+}
+
+/// One point of the graph's history: average bytes per second over a gateway bucket.
+#[derive(Serialize)]
+pub struct HistoryPoint {
+    t: i64,
+    rx: u64,
+    tx: u64,
+}
+
+/// Throughput history for the graph's "24h" (5-minute averages) or "7d" (hourly
+/// averages) window, from the gateway's own reports, with the saved settings and key.
+pub async fn history(
+    window: &str,
+    latest: &Latest,
+    pin_path: &Path,
+    app: &AppHandle,
+) -> Result<Vec<HistoryPoint>, String> {
+    let scale = widget_core::history::Scale::for_window(window)
+        .ok_or_else(|| format!("unknown history window '{window}'"))?;
+    // Away means the gateway is out of reach and polling is paused; do not try.
+    if latest.away.load(Ordering::Relaxed) {
+        return Err("Away from your home network".into());
+    }
+    let s = config::load_settings(app);
+    let key = config::load_api_key().ok_or("No API key set")?;
+    let c = client(&s, pin_path, false)?;
+    let now = Utc::now().timestamp_millis();
+    let url = unifi::history_report_url(&s.gateway_url, &s.site, scale);
+    let buckets = fetch_report(&c, url, &key, now - scale.span_s() * 1000, now).await?;
+    Ok(widget_core::history::bucket_rates(&buckets, scale, now)
+        .into_iter()
+        .map(|p| HistoryPoint {
+            t: p.t_ms,
+            rx: p.rx,
+            tx: p.tx,
+        })
+        .collect())
 }
 
 #[derive(Serialize)]

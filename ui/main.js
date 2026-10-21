@@ -1,10 +1,23 @@
 import {
   pushSample, yMax, formatRate, formatBytes, formatDuration, formatLatency,
   latencyStats, monitorName, formatPeriod, secondWanLines,
+  trimBefore, visiblePoints, nearestPoint, splitAtGaps, formatClock,
 } from "./series.js";
 import { applyTheme } from "./theme.js";
 
-const MAX_POINTS = 150; // 5 minutes at 2s polling
+const MAX_POINTS = 150; // latency readings kept for the tooltip: 5 minutes at 2 s polling
+// Live samples are kept for the longest live window. 1 hour at 2 s is 1800 points.
+const LIVE_KEEP_MS = 3600_000;
+const LIVE_MAX = 4000;
+// Graph windows. Live ones draw the samples the widget collects; history ones come from
+// the gateway's 5-minute and hourly reports (averages), refreshed every 5 minutes.
+const VIEWS = {
+  "5m": { span: 5 * 60_000, gap: 30_000 },
+  "1h": { span: 3600_000, gap: 30_000 },
+  "24h": { span: 86_400_000, gap: 15 * 60_000, history: "5-min avg" },
+  "7d": { span: 7 * 86_400_000, gap: 3 * 3600_000, history: "hourly avg" },
+};
+const HISTORY_EVERY_MS = 5 * 60_000;
 const $ = (id) => document.getElementById(id);
 const canvas = $("graph");
 const ctx = canvas.getContext("2d");
@@ -29,41 +42,140 @@ function fitCanvas() {
   return { w, h };
 }
 
+// The selected window, remembered on this PC. Browser storage can be unavailable.
+let view = "5m";
+try {
+  const saved = localStorage.getItem("graph-view");
+  if (saved && VIEWS[saved]) view = saved;
+} catch {}
+
+// Gateway history per window: { points, at, error }.
+const history = {};
+// Where the pointer is over the graph, as a fraction of its width, or null.
+let hoverX = null;
+
+/** Points for the selected window, the window's end time, and the line-break gap. */
+function viewData() {
+  const v = VIEWS[view];
+  const end = Date.now();
+  const source = v.history ? (history[view] && history[view].points) || [] : samples;
+  return { v, end, points: visiblePoints(source, end, v.span) };
+}
+
 function draw() {
   const size = fitCanvas();
   if (!size) return;
   const { w, h } = size;
   ctx.clearRect(0, 0, w, h);
-  const top = yMax(samples);
-  const step = w / (MAX_POINTS - 1);
-  const x = (i) => w - (samples.length - 1 - i) * step;
-  const y = (v) => h - 2 - (v / top) * (h - 6);
+  const { v, end, points } = viewData();
+  const top = yMax(points);
+  const x = (t) => w - ((end - t) / v.span) * w;
+  const y = (val) => h - 2 - (val / top) * (h - 14);
 
+  // Baseline and the scale's top line, with its value as the axis label.
   ctx.strokeStyle = css("--muted");
   ctx.globalAlpha = 0.25;
   ctx.beginPath();
   ctx.moveTo(0, h - 0.5);
   ctx.lineTo(w, h - 0.5);
+  ctx.setLineDash([2, 3]);
+  ctx.moveTo(0, y(top) + 0.5);
+  ctx.lineTo(w, y(top) + 0.5);
   ctx.stroke();
+  ctx.setLineDash([]);
   ctx.globalAlpha = 1;
+  if (points.length && hoverX === null) {
+    ctx.fillStyle = css("--muted");
+    ctx.font = "10px 'Segoe UI', system-ui, sans-serif";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(formatRate(top), 0, y(top) - 1);
+  }
 
   for (const [key, color] of [["rx", "--down"], ["tx", "--up"]]) {
-    if (samples.length < 2) break;
     ctx.strokeStyle = css(color);
     ctx.lineWidth = 1.5;
-    // Curves through the midpoints between samples: smoother, and never overshoots a peak.
-    const pts = samples.map((s, i) => [x(i), y(s[key])]);
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    for (let i = 1; i < pts.length - 1; i++) {
-      const [cx, cy] = pts[i];
-      const [nx, ny] = pts[i + 1];
-      ctx.quadraticCurveTo(cx, cy, (cx + nx) / 2, (cy + ny) / 2);
+    for (const run of splitAtGaps(points, v.gap)) {
+      if (run.length < 2) continue;
+      // Curves through the midpoints between samples: smoother, and never overshoots a peak.
+      const pts = run.map((s) => [x(s.t), y(s[key])]);
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length - 1; i++) {
+        const [cx, cy] = pts[i];
+        const [nx, ny] = pts[i + 1];
+        ctx.quadraticCurveTo(cx, cy, (cx + nx) / 2, (cy + ny) / 2);
+      }
+      const last = pts[pts.length - 1];
+      ctx.lineTo(last[0], last[1]);
+      ctx.stroke();
     }
-    const last = pts[pts.length - 1];
-    ctx.lineTo(last[0], last[1]);
-    ctx.stroke();
   }
+
+  // Hover: a crosshair on the nearest point and its values in the readout.
+  const p = hoverX === null ? null : nearestPoint(points, end - (1 - hoverX) * v.span);
+  if (p) {
+    const px = Math.round(x(p.t)) + 0.5;
+    ctx.strokeStyle = css("--muted");
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(px, 0);
+    ctx.lineTo(px, h);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    for (const [key, color] of [["rx", "--down"], ["tx", "--up"]]) {
+      ctx.fillStyle = css(color);
+      ctx.beginPath();
+      ctx.arc(px, y(p[key]), 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  showReadout(p, v);
+}
+
+/** The readout over the graph: hovered values, else loading or error text for history. */
+function showReadout(p, v) {
+  const el = $("readout");
+  let text = "";
+  if (p) {
+    text = formatClock(p.t, v.span) + "  \u2193 " + formatRate(p.rx) + "  \u2191 " + formatRate(p.tx);
+    if (v.history) text += "  (" + v.history + ")";
+  } else if (v.history) {
+    const hist = history[view];
+    if (!hist) text = "Loading...";
+    else if (hist.error) text = "History unavailable: " + hist.error;
+    else if (!hist.points.length) text = "No history from the gateway yet";
+  }
+  el.hidden = !text;
+  if (el.textContent !== text) el.textContent = text;
+}
+
+/** Fetches the gateway history for the selected window if it is missing or old. */
+function refreshHistory(force) {
+  const v = VIEWS[view];
+  if (!v.history || !tauri || !tauri.core) return;
+  const name = view;
+  const hist = history[name];
+  if (!force && hist && Date.now() - hist.at < HISTORY_EVERY_MS) return;
+  if (hist && hist.loading) return;
+  history[name] = { points: hist ? hist.points : [], at: hist ? hist.at : 0, loading: true };
+  tauri.core
+    .invoke("history", { window: name })
+    .then((points) => (history[name] = { points, at: Date.now() }))
+    .catch((err) => (history[name] = { points: [], at: Date.now(), error: String(err) }))
+    .finally(draw);
+  draw();
+}
+
+function selectView(name) {
+  view = name;
+  try {
+    localStorage.setItem("graph-view", name);
+  } catch {}
+  for (const b of document.querySelectorAll("#views button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.view === name));
+  }
+  refreshHistory(false);
+  draw();
 }
 
 // Rates arrive every poll interval (2 s); with backoff they can stretch to 60 s.
@@ -77,7 +189,8 @@ let latencies = [];
 function onRates({ rx, tx, latency, monitors, availability_pct: availability, availability_period_s: period, wan2 }) {
   if (away) return;
   lastRatesAt = Date.now();
-  samples = pushSample(samples, { rx, tx }, MAX_POINTS);
+  const now = Date.now();
+  samples = trimBefore(samples.concat([{ t: now, rx, tx }]), now - LIVE_KEEP_MS, LIVE_MAX);
   latencies = pushSample(latencies, { v: typeof latency === "number" ? latency : null, t: Date.now() }, MAX_POINTS);
   $("rx").textContent = "\u2193 " + formatRate(rx);
   $("tx").textContent = "\u2191 " + formatRate(tx);
@@ -191,6 +304,27 @@ function onStatus(message) {
 }
 
 const tauri = window.__TAURI__;
+
+for (const b of document.querySelectorAll("#views button")) {
+  b.addEventListener("click", () => selectView(b.dataset.view));
+}
+canvas.addEventListener("mousemove", (e) => {
+  const r = canvas.getBoundingClientRect();
+  hoverX = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+  draw();
+});
+canvas.addEventListener("mouseleave", () => {
+  hoverX = null;
+  draw();
+});
+// History windows refresh while shown; live ones redraw on every sample anyway.
+setInterval(() => {
+  if (VIEWS[view].history) {
+    refreshHistory(false);
+    draw();
+  }
+}, 60_000);
+
 const openSettings = () => tauri && tauri.core && tauri.core.invoke("open_settings");
 $("gear").addEventListener("click", openSettings);
 $("status").addEventListener("click", openSettings);
@@ -226,6 +360,18 @@ if (tauri && tauri.event) {
   onUptime({ seconds: query.has("nowan") ? null : 106_380, device_seconds: 3_235_463, isp: "ExampleISP" });
   if (query.has("theme")) applyTheme(query.get("theme"));
   if (query.has("away")) onAway(true);
+  // Synthetic gateway history: a daily cycle with some noise, at the report's bucket size.
+  const fake = (span, step) => {
+    const out = [];
+    for (let t = Date.now() - span; t <= Date.now(); t += step) {
+      const day = Math.sin(((t / 3600_000) % 24) / 24 * Math.PI * 2 - 1.5);
+      out.push({ t, rx: Math.max(0, 900_000 + 700_000 * day + Math.random() * 300_000), tx: Math.max(0, 120_000 + 80_000 * day + Math.random() * 40_000) });
+    }
+    return out;
+  };
+  history["24h"] = { points: fake(86_400_000, 300_000), at: Date.now() };
+  history["7d"] = { points: fake(7 * 86_400_000, 3600_000), at: Date.now() };
+  if (query.has("view") && VIEWS[query.get("view")]) selectView(query.get("view"));
   let t = 0;
   setInterval(() => {
     t += 1;
@@ -260,3 +406,5 @@ if (tauri && tauri.window && typeof ResizeObserver === "function") {
     win.setSize(new tauri.window.LogicalSize(card.offsetWidth, height)).catch(() => {});
   }).observe(card);
 }
+
+selectView(view);

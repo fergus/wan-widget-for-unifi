@@ -40,7 +40,15 @@ header .rate:first-of-type { margin-right: auto; }
 .status { cursor: pointer; }
 .down { color: var(--down); }
 .up { color: var(--up); }
-canvas { display: block; width: 100%; height: 110px; margin: 8px 0; }
+.graph { position: relative; margin: 8px 0; }
+canvas { display: block; width: 100%; height: 110px; cursor: crosshair; }
+/* Window switcher, top right over the graph. */
+#views { position: absolute; top: 0; right: 0; display: flex; gap: 1px; }
+#views button { padding: 0 4px; border: 0; border-radius: 4px; background: none; color: var(--muted); font: 600 10px/16px "Segoe UI", system-ui, sans-serif; cursor: pointer; }
+#views button:hover, #views button:focus-visible { color: var(--fg); }
+#views button[aria-pressed="true"] { background: var(--muted); color: var(--bg); opacity: 0.9; }
+/* Hover values (or history status), top left over the graph. */
+#readout { position: absolute; top: 0; left: 0; max-width: calc(100% - 90px); padding: 0 4px; border-radius: 4px; background: var(--bg); color: var(--fg); font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 footer { display: flex; justify-content: space-between; color: var(--muted); }
 footer.meta { margin-top: 2px; }
 footer .label { opacity: 0.8; }

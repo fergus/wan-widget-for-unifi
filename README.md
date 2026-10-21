@@ -7,7 +7,8 @@
 
 A small Windows 11 desktop widget that shows, from your UniFi gateway's local API:
 
-- a live graph of WAN download and upload throughput
+- a graph of WAN download and upload throughput: live for the last 5 minutes or hour,
+  or the last 24 hours and 7 days from the gateway's history. Hover it to read values
 - data used so far in your billing month
 - your public IP address, with a CGNAT badge when the gateway's WAN address differs
 - uptime: how long the WAN link has been up since its last disconnect

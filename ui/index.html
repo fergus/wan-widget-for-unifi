@@ -13,7 +13,16 @@
       <span class="rate up" id="tx">-</span>
       <button id="gear" type="button" title="Settings" aria-label="Settings">&#9881;</button>
     </header>
-    <canvas id="graph" width="320" height="110"></canvas>
+    <div class="graph">
+      <canvas id="graph" width="320" height="110" aria-label="Download and upload throughput graph"></canvas>
+      <div id="views" role="group" aria-label="Graph time window">
+        <button type="button" data-view="5m" title="Last 5 minutes, live">5m</button>
+        <button type="button" data-view="1h" title="Last hour, live (since the widget started)">1h</button>
+        <button type="button" data-view="24h" title="Last 24 hours, 5-minute averages from the gateway">24h</button>
+        <button type="button" data-view="7d" title="Last 7 days, hourly averages from the gateway">7d</button>
+      </div>
+      <div id="readout" hidden></div>
+    </div>
     <footer>
       <div title="Data used so far in this billing month (download plus upload). Hover the figure for the split"><span class="label">Month</span> <span id="month">-</span></div>
       <div title="Time since the WAN link last disconnected. Hover the figure for when that was and how long the gateway itself has been running"><span class="label">Uptime</span> <span id="uptime">-</span></div>

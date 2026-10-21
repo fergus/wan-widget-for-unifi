@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pushSample, yMax, formatRate, formatBytes, formatDuration, formatLatency, latencyStats, monitorName, formatPeriod, secondWanLines } from "./series.js";
+import { pushSample, yMax, formatRate, formatBytes, formatDuration, formatLatency, latencyStats, monitorName, formatPeriod, secondWanLines,
+  trimBefore, visiblePoints, nearestPoint, splitAtGaps, formatClock } from "./series.js";
 
 test("pushSample caps the buffer and drops the oldest", () => {
   let buf = [];
@@ -97,4 +98,42 @@ test("secondWanLines lists the second WAN's monitors and availability", () => {
 
 test("secondWanLines says so when a second WAN reports nothing", () => {
   assert.deepEqual(secondWanLines({ monitors: [] }), ["Second WAN: no monitor data"]);
+});
+
+const pts = (...ts) => ts.map((t) => ({ t, rx: t, tx: 0 }));
+
+test("trimBefore drops old points and caps the count", () => {
+  assert.deepEqual(trimBefore(pts(1, 2, 3, 4), 3, 10).map((p) => p.t), [3, 4]);
+  assert.deepEqual(trimBefore(pts(1, 2, 3, 4), 0, 2).map((p) => p.t), [3, 4]);
+});
+
+test("visiblePoints keeps the window plus one point before it", () => {
+  const p = pts(0, 100, 200, 300, 400);
+  assert.deepEqual(visiblePoints(p, 400, 150).map((x) => x.t), [200, 300, 400]);
+  assert.deepEqual(visiblePoints(p, 400, 1000).map((x) => x.t), [0, 100, 200, 300, 400]);
+  assert.deepEqual(visiblePoints(p, 1000, 100), []);
+  assert.deepEqual(visiblePoints([], 1000, 100), []);
+});
+
+test("nearestPoint finds the closest time", () => {
+  const p = pts(0, 100, 200);
+  assert.equal(nearestPoint(p, 40).t, 0);
+  assert.equal(nearestPoint(p, 60).t, 100);
+  assert.equal(nearestPoint(p, 999).t, 200);
+  assert.equal(nearestPoint(p, -5).t, 0);
+  assert.equal(nearestPoint([], 5), null);
+});
+
+test("splitAtGaps breaks the line where data is missing", () => {
+  const runs = splitAtGaps(pts(0, 2, 4, 40, 42), 10);
+  assert.deepEqual(runs.map((r) => r.map((x) => x.t)), [[0, 2, 4], [40, 42]]);
+  assert.deepEqual(splitAtGaps([], 10), []);
+});
+
+test("formatClock adds seconds for short windows and the day for a week", () => {
+  const t = new Date(2026, 9, 21, 14, 5, 32).getTime(); // a Wednesday, local time
+  assert.equal(formatClock(t, 5 * 60_000), "14:05:32");
+  assert.equal(formatClock(t, 3600_000), "14:05");
+  assert.equal(formatClock(t, 86_400_000), "14:05");
+  assert.equal(formatClock(t, 7 * 86_400_000), "Wed 14:05");
 });

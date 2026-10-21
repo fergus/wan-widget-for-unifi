@@ -115,6 +115,17 @@ fn set_pinned(app: AppHandle, tray: tauri::State<tray::TrayState>, pinned: bool)
     let _ = tray.pin.set_checked(pinned);
 }
 
+/// Average throughput for the graph's "24h" or "7d" window, from the gateway's reports.
+#[tauri::command]
+async fn history(
+    app: AppHandle,
+    latest: tauri::State<'_, Arc<poller::Latest>>,
+    window: String,
+) -> Result<Vec<poller::HistoryPoint>, String> {
+    let pin_path = pin::path(&app).unwrap_or_default();
+    poller::history(&window, &latest, &pin_path, &app).await
+}
+
 /// UniFi OS consoles found on the local network, for Settings > Find gateway.
 #[tauri::command]
 async fn discover_gateways() -> Vec<discover::Found> {
@@ -208,6 +219,7 @@ fn main() {
             forget_pin,
             app_version,
             discover_gateways,
+            history,
             list_sites,
             check_update,
             install_update,

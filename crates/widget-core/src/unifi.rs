@@ -47,6 +47,16 @@ pub fn health_url(gateway_url: &str, site: &str) -> String {
     format!("{}/stat/health", site_base(gateway_url, site))
 }
 
+/// `stat/report/5minutes.site` or `stat/report/hourly.site`, for the graph's history.
+/// Same request body and reply shape as the daily report.
+pub fn history_report_url(gateway_url: &str, site: &str, scale: crate::history::Scale) -> String {
+    format!(
+        "{}/stat/report/{}.site",
+        site_base(gateway_url, site),
+        scale.report()
+    )
+}
+
 pub fn daily_report_url(gateway_url: &str, site: &str) -> String {
     format!("{}/stat/report/daily.site", site_base(gateway_url, site))
 }
@@ -301,7 +311,8 @@ pub fn parse_health(body: &str) -> Result<WanHealth, ParseError> {
     })
 }
 
-/// One day of WAN traffic from `stat/report/daily.site`.
+/// One bucket of WAN traffic from a `stat/report/*.site` report (daily, hourly or
+/// 5-minute; they share a shape).
 /// `start_ms` is the bucket start (local midnight in the controller's timezone).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DayBucket {
@@ -586,6 +597,19 @@ mod tests {
         assert_eq!(
             daily_report_url("https://gw.lan:8443/", "abc"),
             "https://gw.lan:8443/proxy/network/api/s/abc/stat/report/daily.site"
+        );
+    }
+
+    #[test]
+    fn history_reports_use_the_5minute_and_hourly_names() {
+        use crate::history::Scale;
+        assert_eq!(
+            history_report_url("https://192.168.1.1/", "default", Scale::FiveMinutes),
+            "https://192.168.1.1/proxy/network/api/s/default/stat/report/5minutes.site"
+        );
+        assert_eq!(
+            history_report_url("https://192.168.1.1", "default", Scale::Hourly),
+            "https://192.168.1.1/proxy/network/api/s/default/stat/report/hourly.site"
         );
     }
 

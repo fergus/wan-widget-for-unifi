@@ -95,3 +95,65 @@ export function secondWanLines(wan2) {
   }
   return lines.length ? lines : ["Second WAN: no monitor data"];
 }
+
+/** Drops points older than `cutoff` (ms) and keeps at most `max`, newest last. */
+export function trimBefore(points, cutoff, max) {
+  let i = 0;
+  while (i < points.length && points[i].t < cutoff) i++;
+  const kept = points.slice(i);
+  return kept.length > max ? kept.slice(kept.length - max) : kept;
+}
+
+/**
+ * Points (sorted by `t`) inside the window ending at `end` and `span` ms long, plus
+ * the one just before it, so the line enters from the left edge instead of starting
+ * part-way across.
+ */
+export function visiblePoints(points, end, span) {
+  const start = end - span;
+  let i = points.findIndex((p) => p.t >= start);
+  if (i === -1) return points.length && points[points.length - 1].t < start ? [] : points.slice();
+  if (i > 0) i -= 1;
+  return points.slice(i).filter((p) => p.t <= end);
+}
+
+/** The point (sorted by `t`) closest in time to `t`, or null for none. */
+export function nearestPoint(points, t) {
+  if (points.length === 0) return null;
+  let lo = 0;
+  let hi = points.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (points[mid].t < t) lo = mid + 1;
+    else hi = mid;
+  }
+  const prev = points[lo - 1];
+  return prev && t - prev.t < points[lo].t - t ? prev : points[lo];
+}
+
+/** Splits points into runs wherever two neighbours are more than `maxGap` ms apart. */
+export function splitAtGaps(points, maxGap) {
+  const runs = [];
+  let run = [];
+  for (const p of points) {
+    if (run.length && p.t - run[run.length - 1].t > maxGap) {
+      runs.push(run);
+      run = [];
+    }
+    run.push(p);
+  }
+  if (run.length) runs.push(run);
+  return runs;
+}
+
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const pad = (n) => String(n).padStart(2, "0");
+
+/** Local time for the hover readout: seconds for short windows, the weekday for a week. */
+export function formatClock(ms, spanMs) {
+  const d = new Date(ms);
+  const hm = pad(d.getHours()) + ":" + pad(d.getMinutes());
+  if (spanMs <= 15 * 60_000) return hm + ":" + pad(d.getSeconds());
+  if (spanMs > 26 * 3600_000) return DAYS[d.getDay()] + " " + hm;
+  return hm;
+}
