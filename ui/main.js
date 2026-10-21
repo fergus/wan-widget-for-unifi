@@ -1,6 +1,6 @@
 import {
   pushSample, yMax, formatRate, formatBytes, formatDuration, formatLatency,
-  latencyStats, monitorName, formatPeriod,
+  latencyStats, monitorName, formatPeriod, secondWanLines,
 } from "./series.js";
 import { applyTheme } from "./theme.js";
 
@@ -74,7 +74,7 @@ let lastRatesAt = 0;
 // Recent latency readings, for the tooltip's min / average / max.
 let latencies = [];
 
-function onRates({ rx, tx, latency, monitors, availability_pct: availability, availability_period_s: period }) {
+function onRates({ rx, tx, latency, monitors, availability_pct: availability, availability_period_s: period, wan2 }) {
   if (away) return;
   lastRatesAt = Date.now();
   samples = pushSample(samples, { rx, tx }, MAX_POINTS);
@@ -82,12 +82,12 @@ function onRates({ rx, tx, latency, monitors, availability_pct: availability, av
   $("rx").textContent = "\u2193 " + formatRate(rx);
   $("tx").textContent = "\u2191 " + formatRate(tx);
   $("latency").textContent = formatLatency(latency);
-  showLatencyTip(monitors || [], availability, period);
+  showLatencyTip(monitors || [], availability, period, wan2);
   draw();
 }
 
 /** Per-target latency, the recent range and availability. Only rewritten when it changes. */
-function showLatencyTip(monitors, availability, period) {
+function showLatencyTip(monitors, availability, period, wan2) {
   const lines = ["Latency from the gateway to the internet, measured by the gateway"];
   for (const m of monitors) lines.push(monitorName(m.target) + ": " + formatLatency(m.latency));
   const st = latencyStats(latencies.map((l) => l.v));
@@ -98,6 +98,7 @@ function showLatencyTip(monitors, availability, period) {
   if (typeof availability === "number") {
     lines.push("Availability " + availability.toFixed(2) + "%" + (period ? " over the last " + formatPeriod(period) : ""));
   }
+  lines.push(...secondWanLines(wan2));
   const tip = lines.join("\n");
   if ($("latency").title !== tip) $("latency").title = tip;
 }

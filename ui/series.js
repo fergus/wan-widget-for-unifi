@@ -81,3 +81,17 @@ export function formatPeriod(seconds) {
   const m = Math.max(1, Math.round(seconds / 60));
   return m + (m === 1 ? " minute" : " minutes");
 }
+
+/**
+ * Tooltip lines for a dual-WAN gateway's second WAN, or [] when there is none. Each
+ * monitor becomes "Second WAN, Cloudflare: 22 ms".
+ */
+export function secondWanLines(wan2) {
+  if (!wan2) return [];
+  const lines = (wan2.monitors || []).map((m) => "Second WAN, " + monitorName(m.target) + ": " + formatLatency(m.latency));
+  if (typeof wan2.availability_pct === "number") {
+    const over = wan2.availability_period_s ? " over the last " + formatPeriod(wan2.availability_period_s) : "";
+    lines.push("Second WAN availability " + wan2.availability_pct.toFixed(2) + "%" + over);
+  }
+  return lines.length ? lines : ["Second WAN: no monitor data"];
+}

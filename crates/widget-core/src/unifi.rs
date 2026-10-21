@@ -55,6 +55,84 @@ pub fn sysinfo_url(gateway_url: &str, site: &str) -> String {
     format!("{}/stat/sysinfo", site_base(gateway_url, site))
 }
 
+/// Sites the API key can see. Not site-scoped, so no `site` argument.
+pub fn sites_url(gateway_url: &str) -> String {
+    format!(
+        "{}/proxy/network/api/self/sites",
+        gateway_url.trim_end_matches('/')
+    )
+}
+
+/// UniFi OS console information. Answers without an API key, so discovery can use it.
+pub fn console_url(gateway_url: &str) -> String {
+    format!("{}/api/system", gateway_url.trim_end_matches('/'))
+}
+
+/// The legacy self-hosted Network Server's status page (no API key needed).
+pub fn legacy_status_url(gateway_url: &str) -> String {
+    format!("{}/status", gateway_url.trim_end_matches('/'))
+}
+
+#[derive(Deserialize)]
+struct ConsoleInfo {
+    hardware: ConsoleHardware,
+}
+
+#[derive(Deserialize)]
+struct ConsoleHardware {
+    shortname: Option<String>,
+}
+
+/// Some(model code, e.g. "UDRULT") when the reply is a UniFi OS console's `/api/system`.
+/// Anything else, including other web servers, is None. The model may be empty.
+pub fn parse_console(body: &str) -> Option<String> {
+    serde_json::from_str::<ConsoleInfo>(body)
+        .ok()
+        .map(|c| c.hardware.shortname.unwrap_or_default())
+}
+
+#[derive(Deserialize)]
+struct LegacyStatus {
+    meta: LegacyMeta,
+}
+
+#[derive(Deserialize)]
+struct LegacyMeta {
+    server_version: Option<String>,
+}
+
+/// The server version when the reply is a legacy Network Server's `/status`. That
+/// server has no API keys, so the widget cannot use it.
+pub fn parse_legacy_status(body: &str) -> Option<String> {
+    serde_json::from_str::<LegacyStatus>(body)
+        .ok()
+        .and_then(|s| s.meta.server_version)
+}
+
+/// A site the API key can see. `name` is the id used in URLs ("default"); `desc` is
+/// the name shown in the UniFi app.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Site {
+    pub name: String,
+    pub desc: String,
+}
+
+#[derive(Deserialize)]
+struct SiteEntry {
+    name: String,
+    desc: Option<String>,
+}
+
+pub fn parse_sites(body: &str) -> Result<Vec<Site>, ParseError> {
+    Ok(parse_envelope::<SiteEntry>(body)?
+        .into_iter()
+        .map(|e| Site {
+            desc: e.desc.unwrap_or_else(|| e.name.clone()),
+            name: e.name,
+        })
+        .collect())
+}
+
 pub fn device_url(gateway_url: &str, site: &str) -> String {
     format!("{}/stat/device", site_base(gateway_url, site))
 }
@@ -127,6 +205,18 @@ pub struct WanHealth {
     /// WAN availability over `availability_period_s`, as a percentage.
     pub availability_pct: Option<f64>,
     pub availability_period_s: Option<u64>,
+    /// The second WAN on a dual-WAN gateway, when the gateway reports one.
+    pub wan2: Option<SecondWan>,
+}
+
+/// Monitors and availability of a dual-WAN gateway's second WAN (`uptime_stats.WAN2`).
+/// Read defensively: the shape is assumed to match `WAN` and is not yet confirmed on a
+/// real dual-WAN gateway.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SecondWan {
+    pub monitors: Vec<Monitor>,
+    pub availability_pct: Option<f64>,
+    pub availability_period_s: Option<u64>,
 }
 
 /// One WAN monitor target and its average latency.
@@ -141,6 +231,8 @@ pub struct Monitor {
 struct UptimeStats {
     #[serde(rename = "WAN")]
     wan: Option<WanStats>,
+    #[serde(rename = "WAN2")]
+    wan2: Option<WanStats>,
 }
 
 #[derive(Deserialize, Default)]
@@ -181,23 +273,31 @@ pub fn parse_health(body: &str) -> Result<WanHealth, ParseError> {
         .into_iter()
         .find(|e| e.subsystem == "wan")
         .ok_or(ParseError::NoWan)?;
-    let stats = wan.uptime_stats.and_then(|u| u.wan).unwrap_or_default();
+    let uptime_stats = wan.uptime_stats.unwrap_or_default();
+    let stats = uptime_stats.wan.unwrap_or_default();
+    let monitors = |list: Vec<MonitorEntry>| -> Vec<Monitor> {
+        list.into_iter()
+            .map(|m| Monitor {
+                target: m.target,
+                latency_ms: m.latency_average.map(|l| l.max(0.0).round() as u32),
+            })
+            .collect()
+    };
+    let wan2 = uptime_stats.wan2.map(|w| SecondWan {
+        monitors: monitors(w.monitors),
+        availability_pct: w.availability,
+        availability_period_s: w.time_period,
+    });
     Ok(WanHealth {
         rx_bytes_per_s: wan.rx.unwrap_or(0.0).max(0.0) as u64,
         tx_bytes_per_s: wan.tx.unwrap_or(0.0).max(0.0) as u64,
         wan_ip: wan.wan_ip.and_then(|s| s.parse().ok()),
         isp_name: wan.isp_name,
         latency_ms,
-        monitors: stats
-            .monitors
-            .into_iter()
-            .map(|m| Monitor {
-                target: m.target,
-                latency_ms: m.latency_average.map(|l| l.max(0.0).round() as u32),
-            })
-            .collect(),
+        monitors: monitors(stats.monitors),
         availability_pct: stats.availability,
         availability_period_s: stats.time_period,
+        wan2,
     })
 }
 
@@ -258,6 +358,81 @@ mod tests {
         assert_eq!(
             sysinfo_url("https://192.168.1.1/", "default"),
             "https://192.168.1.1/proxy/network/api/s/default/stat/sysinfo"
+        );
+    }
+
+    #[test]
+    fn console_info_identifies_a_unifi_os_console() {
+        // Shape of /api/system on a UCG Ultra (other fields trimmed).
+        let body =
+            r#"{"hardware":{"shortname":"UDRULT","name":""},"name":"Gateway","hasInternet":true}"#;
+        assert_eq!(parse_console(body), Some("UDRULT".into()));
+        assert_eq!(parse_console(r#"{"hardware":{}}"#), Some(String::new()));
+        assert_eq!(parse_console("<html>router login</html>"), None);
+        assert_eq!(parse_console(r#"{"error":{"code":401}}"#), None);
+        assert_eq!(
+            console_url("https://192.168.1.1/"),
+            "https://192.168.1.1/api/system"
+        );
+    }
+
+    #[test]
+    fn legacy_server_status_is_recognised() {
+        let body = r#"{"meta":{"rc":"ok","up":true,"server_version":"8.6.9"},"data":[]}"#;
+        assert_eq!(parse_legacy_status(body), Some("8.6.9".into()));
+        assert_eq!(parse_legacy_status("<html></html>"), None);
+        assert_eq!(parse_legacy_status(r#"{"meta":{"rc":"ok"}}"#), None);
+    }
+
+    #[test]
+    fn sites_list_names_and_descriptions() {
+        let body = r#"{"meta":{"rc":"ok"},"data":[{"name":"default","desc":"Default","role":"admin"},{"name":"x7k2p9q1"}]}"#;
+        assert_eq!(
+            parse_sites(body),
+            Ok(vec![
+                Site {
+                    name: "default".into(),
+                    desc: "Default".into()
+                },
+                Site {
+                    name: "x7k2p9q1".into(),
+                    desc: "x7k2p9q1".into()
+                },
+            ])
+        );
+        assert_eq!(
+            sites_url("https://192.168.1.1:11443/"),
+            "https://192.168.1.1:11443/proxy/network/api/self/sites"
+        );
+    }
+
+    #[test]
+    fn single_wan_has_no_second_wan() {
+        assert_eq!(parse_health(HEALTH).unwrap().wan2, None);
+    }
+
+    #[test]
+    fn second_wan_is_read_when_reported() {
+        // Constructed: the WAN2 shape is assumed to match WAN (see SecondWan).
+        let body = r#"{"meta":{"rc":"ok"},"data":[{"subsystem":"wan","rx_bytes-r":1,"tx_bytes-r":2,
+            "uptime_stats":{"WAN":{"availability":100.0,"time_period":86400,"monitors":[]},
+            "WAN2":{"availability":97.5,"time_period":86400,
+              "monitors":[{"target":"1.1.1.1","latency_average":21.6},{"target":"ping.ui.com"}]}}}]}"#;
+        let w2 = parse_health(body).unwrap().wan2.unwrap();
+        assert_eq!(w2.availability_pct, Some(97.5));
+        assert_eq!(w2.availability_period_s, Some(86400));
+        assert_eq!(
+            w2.monitors,
+            vec![
+                Monitor {
+                    target: "1.1.1.1".into(),
+                    latency_ms: Some(22)
+                },
+                Monitor {
+                    target: "ping.ui.com".into(),
+                    latency_ms: None
+                },
+            ]
         );
     }
 

@@ -37,7 +37,7 @@ fn take_resume() -> bool {
 
 /// The PC's outgoing address. Connecting a UDP socket sends nothing; it only makes the OS
 /// pick the route, so this is free and changes whenever the PC joins another network.
-fn local_ip() -> Option<IpAddr> {
+pub(crate) fn local_ip() -> Option<IpAddr> {
     let sock = UdpSocket::bind("0.0.0.0:0").ok()?;
     sock.connect("192.0.2.1:9").ok()?;
     sock.local_addr().ok().map(|a| a.ip())
@@ -62,6 +62,15 @@ struct Rates {
     rx: u64,
     tx: u64,
     latency: Option<u32>,
+    monitors: Vec<MonitorOut>,
+    availability_pct: Option<f64>,
+    availability_period_s: Option<u64>,
+    wan2: Option<SecondWanOut>,
+}
+
+/// A dual-WAN gateway's second WAN, for the latency tooltip.
+#[derive(Serialize, Clone)]
+struct SecondWanOut {
     monitors: Vec<MonitorOut>,
     availability_pct: Option<f64>,
     availability_period_s: Option<u64>,
@@ -226,18 +235,56 @@ async fn fetch_monthly(
     })
 }
 
+#[derive(Serialize)]
+pub struct SiteOut {
+    name: String,
+    desc: String,
+}
+
+/// Sites the key can see, for the site picker. Uses unsaved settings like Test.
+pub async fn list_sites(s: &Settings, key: &str, pin_path: &Path) -> Result<Vec<SiteOut>, String> {
+    let c = client(s, pin_path, false)?;
+    let body = get_text(&c, &unifi::sites_url(&s.gateway_url), Some(key)).await?;
+    let sites = unifi::parse_sites(&body).map_err(|e| errors::parse(&e))?;
+    Ok(sites
+        .into_iter()
+        .map(|x| SiteOut {
+            name: x.name,
+            desc: x.desc,
+        })
+        .collect())
+}
+
+/// When a connection fails, checks whether the address is a legacy self-hosted Network
+/// Server, which has no API keys, so the user is told why instead of "rejected the key".
+async fn legacy_server_note(c: &reqwest::Client, s: &Settings) -> Option<String> {
+    let body = get_text(c, &unifi::legacy_status_url(&s.gateway_url), None)
+        .await
+        .ok()?;
+    unifi::parse_legacy_status(&body).map(|v| {
+        format!(
+            "This is a legacy self-hosted UniFi Network Server ({v}). It does not support \
+             API keys, so the widget cannot use it. The widget works with UniFi OS consoles \
+             and UniFi OS Server"
+        )
+    })
+}
+
 /// One-off health request with the given (possibly unsaved) settings and key. It checks
 /// an existing pin but never records one, so testing a mistyped address pins nothing.
 pub async fn test_connection(s: &Settings, key: &str, pin_path: &Path) -> Result<String, String> {
     s.validate().map_err(|errs| errs.join("; "))?;
     let c = client(s, pin_path, false)?;
-    let body = get_text(&c, &unifi::health_url(&s.gateway_url, &s.site), Some(key)).await?;
+    let body = match get_text(&c, &unifi::health_url(&s.gateway_url, &s.site), Some(key)).await {
+        Ok(b) => b,
+        Err(e) => return Err(legacy_server_note(&c, s).await.unwrap_or(e.into())),
+    };
     let h = unifi::parse_health(&body).map_err(|e| errors::parse(&e))?;
     // Daily buckets follow the gateway's zone, so say which one it is and flag an
     // override that does not match it.
     let tz_note = match (fetch_gateway_tz(&c, s, key).await.ok().flatten(), s.tz()) {
         (Some(g), Some(set)) if set.name() != g => format!(
-            ". The timezone setting ({}) differs from the gateway's ({g}), so the month              may start at the wrong hour. Leave it blank to use the gateway's",
+            ". The timezone setting ({}) differs from the gateway's ({g}), so the month may start at the wrong hour. Leave it blank to use the gateway's",
             set.name()
         ),
         (Some(g), _) => format!(". Gateway timezone: {g}"),
@@ -368,6 +415,18 @@ pub async fn run(app: AppHandle) {
                             .collect(),
                         availability_pct: h.availability_pct,
                         availability_period_s: h.availability_period_s,
+                        wan2: h.wan2.as_ref().map(|w| SecondWanOut {
+                            monitors: w
+                                .monitors
+                                .iter()
+                                .map(|m| MonitorOut {
+                                    target: m.target.clone(),
+                                    latency: m.latency_ms,
+                                })
+                                .collect(),
+                            availability_pct: w.availability_pct,
+                            availability_period_s: w.availability_period_s,
+                        }),
                     },
                 );
                 if std::time::Instant::now() >= uptime_due {

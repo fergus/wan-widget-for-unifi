@@ -53,6 +53,10 @@ small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
 .actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
 .spacer { flex: 1; }
 .update-row { display: flex; align-items: center; gap: 8px; }
+fieldset .update-row { margin-top: 8px; }
+.hint { color: var(--muted); font-size: 12px; }
+.found { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+code { font-family: ui-monospace, Consolas, monospace; font-size: 0.95em; }
 button { padding: 6px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); font: inherit; cursor: pointer; }
 button.primary { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
 button:disabled { opacity: 0.6; cursor: default; }

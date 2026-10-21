@@ -15,6 +15,10 @@ All gateway calls use the classic UniFi Network local API on UniFi OS
 | Latency | `GET .../stat/health`, `www` entry, `latency` (ms) | Measured by the gateway to the internet, not PC to gateway. Equals `wan.uptime_stats.WAN.latency_average` |
 | Latency per target, availability | `stat/health`, `wan` entry, `uptime_stats.WAN.monitors[]` (`target`, `latency_average`) and `uptime_stats.WAN.availability` over `time_period` (24 h) | The three targets the UniFi app lists (Microsoft, Google, Cloudflare). `alerting_monitors` are separate and ignored. Recorded from a UCG Ultra on gateway firmware 5.1 |
 | Time since last WAN disconnect | `GET .../stat/device`, the device with a non-null `wan1` block (the gateway), its `uplink.uptime` in seconds, every 60 s | Confirmed on a UCG Ultra: `uplink.uptime` is the link's age, while the device's own `uptime` is time since boot and `wan1` has no uptime. Shown as "-" if absent |
+| Console detection | `GET /api/system` (no API key) | A UniFi OS console answers with a `hardware` object (`shortname` "UDRULT" on a UCG Ultra). Used by Find gateway, which tries the .1 address of the PC's /24, then 192.168.1.1 and 192.168.0.1 |
+| Sites | `GET /proxy/network/api/self/sites` | `name` is the id used in URLs ("default"), `desc` the display name |
+| Legacy server detection | `GET /status` (no API key) | The legacy self-hosted Network Server answers with `meta.server_version`. It has no API keys, so Test connection explains instead of reporting a rejected key. On UniFi OS this path is an HTML page |
+| Second WAN | `stat/health`, `wan` entry, `uptime_stats.WAN2` | Assumed to have the same shape as `WAN` (one Home Assistant integration reads it this way). Not confirmed on dual-WAN hardware; whether `rx_bytes-r` covers both links is unknown |
 | External IP | A configurable public lookup (default `https://api.ipify.org`, every 5 minutes), plus the gateway's WAN IP from `stat/health` | Behind carrier-grade NAT the gateway's WAN address is not the public one |
 
 The classic API is undocumented and may change between UniFi releases. All parsing is

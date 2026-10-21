@@ -3,6 +3,19 @@
 All notable changes to WAN Widget for UniFi. Versions follow
 [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+- **Find gateway** in Settings looks for UniFi consoles on your network, and runs by
+  itself the first time. It tries your PC's own network and the common UniFi addresses,
+  without sending your API key.
+- The **Site** field lists the sites your API key can see.
+- UniFi OS Server (self-hosted UniFi OS, usually on port 11443) is supported and
+  documented. Test connection explains when an address is the legacy self-hosted
+  UniFi Network Server, which has no API keys and cannot be used.
+- Dual-WAN gateways: the second WAN's latency and availability show in the latency
+  tooltip when the gateway reports them. Not yet confirmed on dual-WAN hardware.
+- Fixed a run of spaces in the middle of Test connection's timezone warning.
+
 ## 0.2.0 - 2026-10-20
 
 - Latency (gateway to internet, as measured by the gateway) and how long the WAN link

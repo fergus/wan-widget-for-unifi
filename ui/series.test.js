@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pushSample, yMax, formatRate, formatBytes, formatDuration, formatLatency, latencyStats, monitorName, formatPeriod } from "./series.js";
+import { pushSample, yMax, formatRate, formatBytes, formatDuration, formatLatency, latencyStats, monitorName, formatPeriod, secondWanLines } from "./series.js";
 
 test("pushSample caps the buffer and drops the oldest", () => {
   let buf = [];
@@ -75,4 +75,26 @@ test("formatPeriod picks hours or minutes", () => {
   assert.equal(formatPeriod(3600), "1 hour");
   assert.equal(formatPeriod(90 * 60), "2 hours");
   assert.equal(formatPeriod(300), "5 minutes");
+});
+
+test("secondWanLines is empty for a single-WAN gateway", () => {
+  assert.deepEqual(secondWanLines(null), []);
+  assert.deepEqual(secondWanLines(undefined), []);
+});
+
+test("secondWanLines lists the second WAN's monitors and availability", () => {
+  const lines = secondWanLines({
+    monitors: [{ target: "1.1.1.1", latency: 22 }, { target: "ping.ui.com", latency: null }],
+    availability_pct: 97.5,
+    availability_period_s: 86400,
+  });
+  assert.deepEqual(lines, [
+    "Second WAN, Cloudflare: 22 ms",
+    "Second WAN, ping.ui.com: -",
+    "Second WAN availability 97.50% over the last 24 hours",
+  ]);
+});
+
+test("secondWanLines says so when a second WAN reports nothing", () => {
+  assert.deepEqual(secondWanLines({ monitors: [] }), ["Second WAN: no monitor data"]);
 });

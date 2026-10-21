@@ -22,16 +22,30 @@ start with Windows.
 ## Requirements
 
 - Windows 11 (WebView2 is built in)
-- A UniFi gateway running UniFi OS with the Network application. Tested on a UCG Ultra
-  with Network 10.6. Reports from other consoles and versions are welcome.
-- A UniFi API key
+- A UniFi API key, from either:
+  - a UniFi OS console with the Network application (Cloud Gateway, Dream Machine, Dream
+    Router, Cloud Key and so on). Tested on a UCG Ultra with Network 10.6.
+  - UniFi OS Server, the self-hosted version of UniFi OS (usually `https://host:11443`).
+
+The older self-hosted **UniFi Network Server** (the one on port 8443) is not supported:
+it has no API keys, only username and password login. Test connection tells you if
+that is what it found.
+
+Reports from other consoles, versions and dual-WAN setups are welcome. A dual-WAN
+gateway's second WAN shows in the latency tooltip; that part is not yet confirmed on
+real dual-WAN hardware, so please
+[open an issue](https://github.com/fergus/wan-widget-for-unifi/issues/new?template=bug_report.yml)
+if it looks wrong.
 
 ## Setup
 
 1. In the UniFi Network app, open **Settings > Control Plane > Integrations** and
    create an API key.
-2. Start the widget. On first run it opens Settings: enter the gateway address
-   (default `https://192.168.1.1`), paste the API key, and press **Test connection**.
+2. Start the widget. On first run it opens Settings and looks for UniFi consoles on
+   your network. If it finds yours, the address is filled in; otherwise press **Find
+   gateway** or type the address shown in the UniFi app. Paste the API key and press
+   **Test connection**. If your key can see more than one site, pick one from the
+   **Site** list.
 3. Set your billing day so the monthly figure resets when your ISP's month does. The
    month starts at midnight in the gateway's timezone, which the widget reads from the
    gateway. Set a timezone only to override it.

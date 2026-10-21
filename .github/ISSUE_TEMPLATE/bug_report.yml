@@ -21,9 +21,16 @@ body:
     id: console
     attributes:
       label: UniFi console
-      placeholder: "UCG Ultra, UDM Pro, Cloud Key Gen2+, self-hosted..."
+      placeholder: "UCG Ultra, UDM Pro, Cloud Key Gen2+, UniFi OS Server..."
     validations:
       required: true
+  - type: dropdown
+    id: wans
+    attributes:
+      label: Internet connections on the gateway
+      options:
+        - One WAN
+        - Two WANs (failover or load balancing)
   - type: input
     id: network
     attributes:

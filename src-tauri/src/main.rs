@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod config;
+mod discover;
 mod errors;
 mod pin;
 mod poller;
@@ -114,6 +115,28 @@ fn set_pinned(app: AppHandle, tray: tauri::State<tray::TrayState>, pinned: bool)
     let _ = tray.pin.set_checked(pinned);
 }
 
+/// UniFi OS consoles found on the local network, for Settings > Find gateway.
+#[tauri::command]
+async fn discover_gateways() -> Vec<discover::Found> {
+    discover::find(poller::local_ip()).await
+}
+
+/// Sites the key (typed or stored) can see on the gateway in the unsaved settings.
+#[tauri::command]
+async fn list_sites(
+    app: AppHandle,
+    settings: Settings,
+    key: Option<String>,
+) -> Result<Vec<poller::SiteOut>, String> {
+    let key = key
+        .map(|k| k.trim().to_string())
+        .filter(|k| !k.is_empty())
+        .or_else(config::load_api_key)
+        .ok_or("No API key entered or stored")?;
+    let pin_path = pin::path(&app).unwrap_or_default();
+    poller::list_sites(&settings, &key, &pin_path).await
+}
+
 #[tauri::command]
 fn app_version(app: AppHandle) -> String {
     app.package_info().version.to_string()
@@ -184,6 +207,8 @@ fn main() {
             resume_polling,
             forget_pin,
             app_version,
+            discover_gateways,
+            list_sites,
             check_update,
             install_update,
             open_log_folder

@@ -14,13 +14,22 @@
       <legend>Gateway</legend>
       <label>Gateway URL
         <input id="gatewayUrl" type="url" required placeholder="https://192.168.1.1">
+        <small>A UniFi OS console, or UniFi OS Server (usually <code>https://host:11443</code>).</small>
       </label>
+      <div class="update-row">
+        <span id="findStatus" class="hint">Not sure of the address?</span>
+        <span class="spacer"></span>
+        <button type="button" id="findGateway">Find gateway</button>
+      </div>
+      <div id="foundList" class="found" hidden></div>
       <label>API key
         <input id="apiKey" type="password" autocomplete="off" spellcheck="false">
         <small id="keyHint">Create one in the UniFi Network app. It is stored in Windows Credential Manager, never in the settings file.</small>
       </label>
       <label>Site
-        <input id="site" type="text" required>
+        <input id="site" type="text" required list="sites" spellcheck="false">
+        <datalist id="sites"></datalist>
+        <small id="siteHint">Usually "default". Test connection lists the sites your key can see.</small>
       </label>
       <label class="check">
         <input id="acceptInvalidCerts" type="checkbox">
