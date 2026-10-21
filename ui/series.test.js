@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pushSample, yMax, formatRate, formatBytes, formatDuration, formatLatency, latencyStats, monitorName, formatPeriod, secondWanLines,
+import { pushSample, yScale, formatRate, formatBytes, formatDuration, formatLatency, latencyStats, monitorName, formatPeriod, secondWanLines,
   trimBefore, visiblePoints, nearestPoint, splitAtGaps, formatClock } from "./series.js";
 
 test("pushSample caps the buffer and drops the oldest", () => {
@@ -15,16 +15,23 @@ test("pushSample does not mutate its input", () => {
   assert.equal(a.length, 1);
 });
 
-test("yMax of an empty or idle series is 1", () => {
-  assert.equal(yMax([]), 1);
-  assert.equal(yMax([{ rx: 0, tx: 0 }]), 1);
+const mbit = (n) => (n * 1e6) / 8; // Mbit/s in bytes/s
+
+test("yScale rounds the peak up to a multiple of 10 Mbit/s, with a 50% label", () => {
+  assert.deepEqual(yScale([{ rx: mbit(124), tx: mbit(3) }]), { top: mbit(130), topLabel: "130 Mbit/s", halfLabel: "65 Mbit/s" });
+  assert.deepEqual(yScale([{ rx: mbit(1), tx: mbit(3) }]), { top: mbit(10), topLabel: "10 Mbit/s", halfLabel: "5 Mbit/s" });
+  assert.equal(yScale([{ rx: mbit(1210), tx: 0 }]).topLabel, "1210 Mbit/s");
 });
 
-test("yMax rounds up to 1/2/5 x 10^n using the larger of rx and tx", () => {
-  assert.equal(yMax([{ rx: 130, tx: 20 }]), 200);
-  assert.equal(yMax([{ rx: 20, tx: 310 }]), 500);
-  assert.equal(yMax([{ rx: 600, tx: 0 }]), 1000);
-  assert.equal(yMax([{ rx: 500, tx: 0 }]), 500);
+test("yScale keeps an exact multiple of 10 as the top", () => {
+  assert.equal(yScale([{ rx: mbit(20), tx: 0 }]).topLabel, "20 Mbit/s");
+  assert.equal(yScale([{ rx: mbit(20.01), tx: 0 }]).topLabel, "30 Mbit/s");
+});
+
+test("yScale uses kbit/s below 1 Mbit/s and at least 10 when idle", () => {
+  assert.deepEqual(yScale([{ rx: 950_000 / 8, tx: 0 }]), { top: 950_000 / 8, topLabel: "950 kbit/s", halfLabel: "475 kbit/s" });
+  assert.deepEqual(yScale([]), { top: 10_000 / 8, topLabel: "10 kbit/s", halfLabel: "5 kbit/s" });
+  assert.equal(yScale([{ rx: 0, tx: 0 }]).topLabel, "10 kbit/s");
 });
 
 test("formatRate converts bytes/s to bits", () => {

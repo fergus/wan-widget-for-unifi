@@ -1,5 +1,5 @@
 import {
-  pushSample, yMax, formatRate, formatBytes, formatDuration, formatLatency,
+  pushSample, yScale, formatRate, formatBytes, formatDuration, formatLatency,
   latencyStats, monitorName, formatPeriod, secondWanLines,
   trimBefore, visiblePoints, nearestPoint, splitAtGaps, formatClock,
 } from "./series.js";
@@ -68,27 +68,33 @@ function draw() {
   const { w, h } = size;
   ctx.clearRect(0, 0, w, h);
   const { v, end, points } = viewData();
-  const top = yMax(points);
+  const { top, topLabel, halfLabel } = yScale(points);
   const x = (t) => w - ((end - t) / v.span) * w;
   const y = (val) => h - 2 - (val / top) * (h - 14);
 
-  // Baseline and the scale's top line, with its value as the axis label.
+  // Solid baseline; dashed grid lines at the top of the scale and at 50%, labelled.
   ctx.strokeStyle = css("--muted");
   ctx.globalAlpha = 0.25;
   ctx.beginPath();
   ctx.moveTo(0, h - 0.5);
   ctx.lineTo(w, h - 0.5);
+  ctx.stroke();
   ctx.setLineDash([2, 3]);
-  ctx.moveTo(0, y(top) + 0.5);
-  ctx.lineTo(w, y(top) + 0.5);
+  ctx.beginPath();
+  for (const val of [top, top / 2]) {
+    ctx.moveTo(0, Math.round(y(val)) + 0.5);
+    ctx.lineTo(w, Math.round(y(val)) + 0.5);
+  }
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
-  if (points.length && hoverX === null) {
+  if (points.length) {
     ctx.fillStyle = css("--muted");
     ctx.font = "10px 'Segoe UI', system-ui, sans-serif";
     ctx.textBaseline = "bottom";
-    ctx.fillText(formatRate(top), 0, y(top) - 1);
+    // The hover readout sits over the top label, so that one steps aside while hovering.
+    if (hoverX === null) ctx.fillText(topLabel, 0, Math.round(y(top)) - 1);
+    ctx.fillText(halfLabel, 0, Math.round(y(top / 2)) - 1);
   }
 
   for (const [key, color] of [["rx", "--down"], ["tx", "--up"]]) {

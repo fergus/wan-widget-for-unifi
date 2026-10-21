@@ -6,16 +6,18 @@ export function pushSample(buf, sample, max) {
   return next.length > max ? next.slice(next.length - max) : next;
 }
 
-/** Nice-ish upper bound for the y axis so the graph does not jitter every tick. */
-export function yMax(buf) {
+/**
+ * The y axis for samples in bytes/s: the top is the peak rounded up to a multiple of 10
+ * in the unit it is labelled in (Mbit/s from 1 Mbit/s up, else kbit/s), at least 10.
+ * Returns the top in bytes/s and the labels for the top and the 50% line.
+ */
+export function yScale(buf) {
   let peak = 0;
   for (const s of buf) peak = Math.max(peak, s.rx, s.tx);
-  if (peak <= 0) return 1;
-  const pow = Math.pow(10, Math.floor(Math.log10(peak)));
-  for (const step of [1, 2, 5, 10]) {
-    if (peak <= step * pow) return step * pow;
-  }
-  return 10 * pow;
+  const bits = peak * 8;
+  const [unit, name] = bits >= 1e6 ? [1e6, "Mbit/s"] : [1e3, "kbit/s"];
+  const top = Math.max(10, Math.ceil(bits / unit / 10 - 1e-9) * 10);
+  return { top: (top * unit) / 8, topLabel: top + " " + name, halfLabel: top / 2 + " " + name };
 }
 
 /** Bytes per second to a human string in megabits/second, e.g. "4.1 Mbit/s". */

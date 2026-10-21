@@ -8,7 +8,8 @@ All notable changes to WAN Widget for UniFi. Versions follow
 - Richer graph: switch between the last 5 minutes, hour, 24 hours and 7 days with the
   buttons over the graph. 24 hours and 7 days come from the gateway's own 5-minute and
   hourly averages, so they are there straight after a restart. Hover the graph to read
-  the time and both rates at that point; the top line is labelled with its value.
+  the time and both rates at that point. The scale tops out at a multiple of 10
+  (for example 130 Mbit/s), with a labelled line at 50%.
 - **Find gateway** in Settings looks for UniFi consoles on your network, and runs by
   itself the first time. It tries your PC's own network and the common UniFi addresses,
   without sending your API key.
