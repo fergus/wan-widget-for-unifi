@@ -97,6 +97,33 @@ window you look at.
 The tray menu (left-click the icon to show or hide the widget) has Click-through, Pin
 to desktop, Check gateway now, Settings, Start with Windows and Check for updates.
 
+### Notifications
+
+The widget can show a Windows notification when:
+
+- your internet connection goes down, and when it is back (with how long it was out).
+  This is the gateway's own view of its WAN, checked once a minute. On a dual-WAN
+  gateway each connection is reported separately.
+- your public IP address changes, including a change while the PC was off.
+- the gateway stops answering for over a minute while the PC is still on your home
+  network. Leaving home is Away, not an outage, so it sends nothing.
+- a new version is available: once per version each time the widget starts.
+
+All four are on by default; turn any of them off under **Settings > Notifications**.
+Windows' own notification and Focus settings still apply.
+
+### Accessibility
+
+- The rates read as "Download" and "Upload" to screen readers, and each figure at the
+  bottom is followed by the same detail its tooltip shows, so nothing is mouse-only.
+- The graph has a text summary (the window, and the highest and latest rates), kept up
+  to date. Tab to the graph and use the left and right arrow keys to read values along
+  it (Shift for bigger steps, Home and End for the ends, Escape to stop); the readout is
+  announced as it changes.
+- Everything you can Tab to has a visible focus outline.
+- In a Windows contrast theme the graph and badges use the theme's colours.
+- Settings announces Test connection results, errors, Find gateway and update status.
+
 ### Away from home
 
 <picture>

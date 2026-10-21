@@ -14,6 +14,11 @@ export function toForm(s) {
     ipLookupUrl: s.ip_lookup_url,
     acceptInvalidCerts: s.accept_invalid_certs,
     theme: s.theme,
+    // Older settings files have no notify block; every notification defaults to on.
+    notifyWan: !s.notify || s.notify.wan !== false,
+    notifyIp: !s.notify || s.notify.ip !== false,
+    notifyGateway: !s.notify || s.notify.gateway !== false,
+    notifyUpdate: !s.notify || s.notify.update !== false,
   };
 }
 
@@ -46,6 +51,12 @@ export function fromForm(f) {
       ip_lookup_url: f.lookupEnabled ? url : "",
       accept_invalid_certs: Boolean(f.acceptInvalidCerts),
       theme: String(f.theme),
+      notify: {
+        wan: Boolean(f.notifyWan),
+        ip: Boolean(f.notifyIp),
+        gateway: Boolean(f.notifyGateway),
+        update: Boolean(f.notifyUpdate),
+      },
     },
     errors: [],
   };

@@ -17,7 +17,7 @@
         <small>A UniFi OS console, or UniFi OS Server (usually <code>https://host:11443</code>).</small>
       </label>
       <div class="update-row">
-        <span id="findStatus" class="hint">Not sure of the address?</span>
+        <span id="findStatus" class="hint" role="status">Not sure of the address?</span>
         <span class="spacer"></span>
         <button type="button" id="findGateway">Find gateway</button>
       </div>
@@ -29,7 +29,7 @@
       <label>Site
         <input id="site" type="text" required list="sites" spellcheck="false">
         <datalist id="sites"></datalist>
-        <small id="siteHint">Usually "default". Test connection lists the sites your key can see.</small>
+        <small id="siteHint" role="status">Usually "default". Test connection lists the sites your key can see.</small>
       </label>
       <label class="check">
         <input id="acceptInvalidCerts" type="checkbox">
@@ -83,6 +83,27 @@
     </fieldset>
 
     <fieldset>
+      <legend>Notifications</legend>
+      <label class="check">
+        <input id="notifyWan" type="checkbox">
+        Internet goes down, and when it is back
+      </label>
+      <label class="check">
+        <input id="notifyIp" type="checkbox">
+        Public IP address changes
+      </label>
+      <label class="check">
+        <input id="notifyGateway" type="checkbox">
+        Gateway stops answering for over a minute (not while Away)
+      </label>
+      <label class="check">
+        <input id="notifyUpdate" type="checkbox">
+        New version available (once each time the widget starts)
+      </label>
+      <small>Shown as Windows notifications. Windows Focus and notification settings still apply.</small>
+    </fieldset>
+
+    <fieldset>
       <legend>Windows</legend>
       <label class="check">
         <input id="startWithWindows" type="checkbox">
@@ -102,7 +123,7 @@
         <button type="button" id="checkUpdate">Check for updates</button>
         <button type="button" id="installUpdate" class="primary" hidden>Install and restart</button>
       </div>
-      <small id="updateStatus">Checked once a day. Nothing installs until you choose it.</small>
+      <small id="updateStatus" role="status">Checked once a day. Nothing installs until you choose it.</small>
     </fieldset>
 
     <fieldset>
@@ -115,8 +136,8 @@
       <small>Attach the log when you report a problem. It contains no API key.</small>
     </fieldset>
 
-    <ul id="errors" class="errors" hidden></ul>
-    <p id="result" class="result" hidden></p>
+    <ul id="errors" class="errors" role="alert" hidden></ul>
+    <p id="result" class="result" role="status" hidden></p>
 
     <div class="actions">
       <button type="button" id="test">Test connection</button>

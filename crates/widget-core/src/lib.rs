@@ -1,6 +1,7 @@
 //! Pure, I/O-free logic for the UniFi widget: response parsing, billing-cycle
 //! maths, CGNAT detection and settings validation. HTTP and UI live elsewhere.
 
+pub mod alerts;
 pub mod history;
 pub mod ip;
 pub mod settings;

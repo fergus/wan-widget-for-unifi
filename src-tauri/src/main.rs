@@ -3,6 +3,7 @@
 mod config;
 mod discover;
 mod errors;
+mod notify;
 mod pin;
 mod poller;
 mod tray;
@@ -198,6 +199,7 @@ fn main() {
                 .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
                 .build(),
         )
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,

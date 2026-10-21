@@ -5,6 +5,13 @@ All notable changes to WAN Widget for UniFi. Versions follow
 
 ## Unreleased
 
+- Windows notifications when the internet goes down and comes back, when your public IP
+  changes, when the gateway stops answering for over a minute, and when a new version
+  is available. Each can be turned off in Settings > Notifications.
+- Accessibility: screen readers hear "Download" and "Upload" rather than arrows, get a
+  text summary of the graph and the detail behind each figure, and can read the graph
+  with the arrow keys. Visible focus outlines, Windows contrast themes for the graph,
+  and Settings announces results and errors.
 - Richer graph: switch between the last 5 minutes, hour, 24 hours and 7 days with the
   buttons over the graph. 24 hours and 7 days come from the gateway's own 5-minute and
   hourly averages, so they are there straight after a restart. Hover the graph to read

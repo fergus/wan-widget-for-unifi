@@ -19,6 +19,33 @@ pub struct Settings {
     pub accept_invalid_certs: bool,
     /// "system" (follow Windows), "dark" or "light".
     pub theme: String,
+    /// Which Windows notifications to send.
+    pub notify: Notify,
+}
+
+/// Windows notifications, each on by default.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Notify {
+    /// The internet connection (a WAN) goes down, and when it comes back.
+    pub wan: bool,
+    /// The public IP address changes.
+    pub ip: bool,
+    /// The gateway stops answering while the PC is still on the home network.
+    pub gateway: bool,
+    /// A new version is available (once per version each time the widget starts).
+    pub update: bool,
+}
+
+impl Default for Notify {
+    fn default() -> Self {
+        Self {
+            wan: true,
+            ip: true,
+            gateway: true,
+            update: true,
+        }
+    }
 }
 
 impl Default for Settings {
@@ -32,6 +59,7 @@ impl Default for Settings {
             ip_lookup_url: "https://api.ipify.org".into(),
             accept_invalid_certs: true,
             theme: "system".into(),
+            notify: Notify::default(),
         }
     }
 }
@@ -146,6 +174,15 @@ mod tests {
             Some(chrono_tz::Australia::Perth)
         );
         assert_eq!(s.resolve_tz(None, None), None);
+    }
+
+    #[test]
+    fn notifications_default_on_and_older_files_still_load() {
+        let s: Settings = serde_json::from_str(r#"{"billing_day":15}"#).unwrap();
+        assert_eq!(s.notify, Notify::default());
+        assert!(s.notify.wan && s.notify.ip && s.notify.gateway && s.notify.update);
+        let s: Settings = serde_json::from_str(r#"{"notify":{"ip":false}}"#).unwrap();
+        assert!(!s.notify.ip && s.notify.wan);
     }
 
     #[test]

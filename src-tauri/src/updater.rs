@@ -14,6 +14,10 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 const FIRST_CHECK_AFTER: Duration = Duration::from_secs(30);
 const CHECK_EVERY: Duration = Duration::from_secs(24 * 60 * 60);
 
+/// The version last announced in a notification during this run, so each version is
+/// announced once per start of the widget.
+static ANNOUNCED: Mutex<Option<String>> = Mutex::new(None);
+
 /// The newest update found, waiting for the user to install it.
 #[derive(Default)]
 pub struct Pending(Mutex<Option<Update>>);
@@ -37,6 +41,20 @@ pub async fn check(app: &AppHandle) -> Result<Option<String>, String> {
     crate::tray::show_update(app, version.as_deref());
     if let Some(v) = &version {
         let _ = app.emit("update-available", v.clone());
+        let fresh = ANNOUNCED
+            .lock()
+            .map(|mut a| a.replace(v.clone()).as_deref() != Some(v.as_str()))
+            .unwrap_or(false);
+        if fresh && crate::config::load_settings(app).notify.update {
+            crate::notify::send(
+                app,
+                "Update available",
+                &format!(
+                    "WAN Widget for UniFi {v} is ready. Choose Install update in the tray menu \
+                     or in Settings."
+                ),
+            );
+        }
     }
     Ok(version)
 }
