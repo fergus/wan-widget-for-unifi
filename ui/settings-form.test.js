@@ -11,6 +11,7 @@ const backend = {
   ip_lookup_url: "https://api.ipify.org",
   accept_invalid_certs: true,
   theme: "system",
+  notify: { wan: true, ip: false, gateway: true, update: true },
 };
 
 test("toForm shows the poll interval in seconds and enables lookup when a URL is set", () => {
@@ -71,4 +72,16 @@ test("errorList normalises strings, arrays and Errors", () => {
   assert.deepEqual(errorList("boom"), ["boom"]);
   assert.deepEqual(errorList(["a", "b"]), ["a", "b"]);
   assert.deepEqual(errorList(new Error("bad")), ["bad"]);
+});
+
+test("notification switches default to on when the settings have none", () => {
+  const { notify, ...older } = backend;
+  const f = toForm(older);
+  assert.deepEqual([f.notifyWan, f.notifyIp, f.notifyGateway, f.notifyUpdate], [true, true, true, true]);
+  assert.deepEqual(fromForm(f).settings.notify, { wan: true, ip: true, gateway: true, update: true });
+});
+
+test("a notification switched off stays off", () => {
+  assert.equal(toForm(backend).notifyIp, false);
+  assert.equal(fromForm(toForm(backend)).settings.notify.ip, false);
 });

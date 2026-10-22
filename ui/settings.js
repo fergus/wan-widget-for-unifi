@@ -16,6 +16,7 @@ const stub = {
     ip_lookup_url: "https://api.ipify.org",
     accept_invalid_certs: true,
     theme: "system",
+    notify: { wan: true, ip: true, gateway: true, update: true },
   }),
   set_api_key: async () => null,
   save_settings: async () => null,
@@ -35,7 +36,7 @@ const stub = {
 const invoke = tauri && tauri.core ? tauri.core.invoke : (cmd, args) => stub[cmd](args);
 
 const FIELDS = ["gatewayUrl", "site", "pollSeconds", "billingDay", "timezone", "ipLookupUrl", "theme"];
-const CHECKS = ["lookupEnabled", "acceptInvalidCerts"];
+const CHECKS = ["lookupEnabled", "acceptInvalidCerts", "notifyWan", "notifyIp", "notifyGateway", "notifyUpdate"];
 
 function readForm() {
   const f = {};

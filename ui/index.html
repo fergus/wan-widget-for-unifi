@@ -9,34 +9,35 @@
 <body>
   <main class="card" data-tauri-drag-region>
     <header data-tauri-drag-region>
-      <span class="rate down" id="rx">-</span>
-      <span class="rate up" id="tx">-</span>
+      <span class="rate down"><span aria-hidden="true">&#8595; </span><span class="sr">Download </span><span id="rx">-</span></span>
+      <span class="rate up"><span aria-hidden="true">&#8593; </span><span class="sr">Upload </span><span id="tx">-</span></span>
       <button id="gear" type="button" title="Settings" aria-label="Settings">&#9881;</button>
     </header>
     <div class="graph">
-      <canvas id="graph" width="320" height="110" aria-label="Download and upload throughput graph"></canvas>
+      <canvas id="graph" width="320" height="110" role="img" tabindex="0" aria-label="Throughput graph" aria-describedby="graphHelp"></canvas>
+      <span id="graphHelp" class="sr">Use the left and right arrow keys to read values along the graph, Home and End to jump to the ends, and Escape to stop.</span>
       <div id="views" role="group" aria-label="Graph time window">
-        <button type="button" data-view="5m" title="Last 5 minutes, live">5m</button>
-        <button type="button" data-view="1h" title="Last hour, live (since the widget started)">1h</button>
-        <button type="button" data-view="24h" title="Last 24 hours, 5-minute averages from the gateway">24h</button>
-        <button type="button" data-view="7d" title="Last 7 days, hourly averages from the gateway">7d</button>
+        <button type="button" data-view="5m" title="Last 5 minutes, live: the gateway's current rate every 2 seconds, so short bursts show at full height">5m</button>
+        <button type="button" data-view="1h" title="Last hour, live like 5m, since the widget started">1h</button>
+        <button type="button" data-view="24h" title="Last 24 hours, 5-minute averages from the gateway, so short bursts peak lower than on 5m and 1h">24h</button>
+        <button type="button" data-view="7d" title="Last 7 days, hourly averages from the gateway, so peaks are lower again than on 24h">7d</button>
       </div>
-      <div id="readout" hidden></div>
+      <div id="readout" role="status" aria-live="polite" hidden></div>
     </div>
     <footer>
-      <div title="Data used so far in this billing month (download plus upload). Hover the figure for the split"><span class="label">Month</span> <span id="month">-</span></div>
-      <div title="Time since the WAN link last disconnected. Hover the figure for when that was and how long the gateway itself has been running"><span class="label">Uptime</span> <span id="uptime">-</span></div>
+      <div title="Data used so far in this billing month (download plus upload). Hover the figure for the split"><span class="label">Month</span> <span id="month">-</span><span class="sr" id="month-detail"></span></div>
+      <div title="Time since the WAN link last disconnected. Hover the figure for when that was and how long the gateway itself has been running"><span class="label">Uptime</span> <span id="uptime">-</span><span class="sr" id="uptime-detail"></span></div>
     </footer>
     <footer class="meta">
       <div title="Your public IP address. Hover the address for the gateway's WAN address too">
-        <span class="label">IP</span> <span id="ip">-</span>
+        <span class="label">IP</span> <span id="ip">-</span><span class="sr" id="ip-detail"></span>
         <span id="cgnat" class="badge" hidden title="Gateway WAN address differs from your public IP">CGNAT</span>
       </div>
-      <div title="Latency from the gateway to the internet, measured by the gateway. Hover the figure for each monitor target, the recent range and availability"><span class="label">Latency</span> <span id="latency">-</span></div>
+      <div title="Latency from the gateway to the internet, measured by the gateway. Hover the figure for each monitor target, the recent range and availability"><span class="label">Latency</span> <span id="latency">-</span><span class="sr" id="latency-detail"></span></div>
     </footer>
     <div id="away" class="status" role="button" tabindex="0" hidden>Away from your home network. Paused. Click to check again</div>
-    <div id="status" class="status" hidden></div>
-    <div id="stale" class="status" hidden>No recent data</div>
+    <div id="status" class="status" role="status" hidden></div>
+    <div id="stale" class="status" role="status" hidden>No recent data</div>
   </main>
   <script type="module" src="main.js"></script>
 </body>

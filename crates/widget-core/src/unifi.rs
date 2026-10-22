@@ -1,5 +1,6 @@
 //! Parsing for the classic UniFi Network local API (`/proxy/network/api/s/<site>/...`).
 
+use std::collections::BTreeMap;
 use std::net::IpAddr;
 
 use serde::Deserialize;
@@ -153,6 +154,9 @@ struct DeviceEntry {
     wan1: Option<Wan1>,
     uplink: Option<Uplink>,
     uptime: Option<f64>,
+    /// The gateway's own view of each WAN, e.g. {"WAN":"online"}.
+    #[serde(default)]
+    last_wan_status: BTreeMap<String, String>,
 }
 
 #[derive(Deserialize)]
@@ -164,12 +168,14 @@ struct Uplink {
 }
 
 /// Uptimes of the gateway, in seconds, from `stat/device`.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct GatewayUptime {
     /// How long the WAN link has been up: the time since its last disconnect.
     pub wan_s: Option<u64>,
     /// How long the gateway itself has run since it last booted.
     pub device_s: Option<u64>,
+    /// Each WAN's state as the gateway reports it ("online", "offline"), by WAN name.
+    pub wan_status: BTreeMap<String, String>,
 }
 
 /// Finds the gateway (the device with a `wan1` block) and reads its link uptime
@@ -183,6 +189,7 @@ pub fn parse_gateway_uptime(body: &str) -> Result<GatewayUptime, ParseError> {
         .map(|d| GatewayUptime {
             wan_s: d.uplink.and_then(|u| u.uptime).map(secs),
             device_s: d.uptime.map(secs),
+            wan_status: d.last_wan_status,
         })
         .unwrap_or_default())
 }
@@ -217,6 +224,9 @@ pub struct WanHealth {
     pub availability_period_s: Option<u64>,
     /// The second WAN on a dual-WAN gateway, when the gateway reports one.
     pub wan2: Option<SecondWan>,
+    /// The `www` (internet) subsystem's status: "ok", "error", ... Used to tell when the
+    /// internet is down on gateways that do not report `last_wan_status`.
+    pub internet_status: Option<String>,
 }
 
 /// Monitors and availability of a dual-WAN gateway's second WAN (`uptime_stats.WAN2`).
@@ -262,6 +272,7 @@ struct MonitorEntry {
 #[derive(Deserialize)]
 struct HealthEntry {
     subsystem: String,
+    status: Option<String>,
     latency: Option<f64>,
     uptime_stats: Option<UptimeStats>,
     #[serde(rename = "rx_bytes-r")]
@@ -274,11 +285,11 @@ struct HealthEntry {
 
 pub fn parse_health(body: &str) -> Result<WanHealth, ParseError> {
     let entries = parse_envelope::<HealthEntry>(body)?;
-    let latency_ms = entries
-        .iter()
-        .find(|e| e.subsystem == "www")
+    let www = entries.iter().find(|e| e.subsystem == "www");
+    let latency_ms = www
         .and_then(|e| e.latency)
         .map(|l| l.max(0.0).round() as u32);
+    let internet_status = www.and_then(|e| e.status.clone());
     let wan = entries
         .into_iter()
         .find(|e| e.subsystem == "wan")
@@ -308,6 +319,7 @@ pub fn parse_health(body: &str) -> Result<WanHealth, ParseError> {
         availability_pct: stats.availability,
         availability_period_s: stats.time_period,
         wan2,
+        internet_status,
     })
 }
 
@@ -510,7 +522,8 @@ mod tests {
             parse_gateway_uptime(body),
             Ok(GatewayUptime {
                 wan_s: Some(106_380),
-                device_s: Some(3_235_463)
+                device_s: Some(3_235_463),
+                wan_status: BTreeMap::from([("WAN".to_string(), "online".to_string())]),
             })
         );
         assert_eq!(

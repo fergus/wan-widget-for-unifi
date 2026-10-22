@@ -2,7 +2,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/widget-dark.png">
-  <img src="docs/images/widget-light.png" width="360" alt="The widget: download 2.8 Mbit/s and upload 2.0 Mbit/s above a live graph, with 463.0 GB used this month, 1d 5h uptime, a public IP with a CGNAT badge and 10 ms latency">
+  <img src="docs/images/widget-light.png" width="360" alt="The widget: download 8.0 Mbit/s and upload 2.1 Mbit/s above the last 5 minutes of throughput, with the scale lines at 10 and 5 Mbit/s and buttons for 5m, 1h, 24h and 7d; below, 463.0 GB used this month, 1d 5h uptime, a public IP with a CGNAT badge and 11 ms latency">
 </picture>
 
 A small Windows 11 desktop widget that shows, from your UniFi gateway's local API:
@@ -72,8 +72,57 @@ Latency and uptime are measured by the gateway, so they describe your internet
 connection rather than your Wi-Fi. Per-target latency and availability need a gateway
 that reports `uptime_stats`; without it you still get the overall latency.
 
+### Reading the graph
+
+The buttons over the graph pick how far back it looks. The windows measure throughput
+in different ways, so the same burst of traffic peaks at a different height in each:
+
+| Window | Each point on the line | Peaks |
+|---|---|---|
+| 5m, 1h | The gateway's current rate, read every 2 seconds while the widget runs | Highest. Short bursts show at close to their real speed |
+| 24h | The average over 5 minutes, from the gateway's own history | Lower. A burst is spread over its 5 minutes |
+| 7d | The average over an hour, from the gateway's own history | Lowest. A burst is spread over its hour |
+
+For example, a 30-second download at 120 Mbit/s, with the connection idle otherwise,
+shows at about 120 Mbit/s on 5m and 1h, about 12 Mbit/s on 24h (30 of 300 seconds),
+and about 1 Mbit/s on 7d (30 of 3,600 seconds). Nothing is missing: the gateway only
+keeps averages for the longer periods. On a real day the gap is smaller but still clear:
+on a UCG Ultra, the busiest 5 minutes averaged 124 Mbit/s and the busiest hour 63 Mbit/s.
+
+The scale fits each window's own highest point, so read the labels rather than
+comparing line heights between windows. The 1h window only covers the time since the
+widget started. The month's data total is unaffected: it counts every byte, whichever
+window you look at.
+
 The tray menu (left-click the icon to show or hide the widget) has Click-through, Pin
 to desktop, Check gateway now, Settings, Start with Windows and Check for updates.
+
+### Notifications
+
+The widget can show a Windows notification when:
+
+- your internet connection goes down, and when it is back (with how long it was out).
+  This is the gateway's own view of its WAN, checked once a minute. On a dual-WAN
+  gateway each connection is reported separately.
+- your public IP address changes, including a change while the PC was off.
+- the gateway stops answering for over a minute while the PC is still on your home
+  network. Leaving home is Away, not an outage, so it sends nothing.
+- a new version is available: once per version each time the widget starts.
+
+All four are on by default; turn any of them off under **Settings > Notifications**.
+Windows' own notification and Focus settings still apply.
+
+### Accessibility
+
+- The rates read as "Download" and "Upload" to screen readers, and each figure at the
+  bottom is followed by the same detail its tooltip shows, so nothing is mouse-only.
+- The graph has a text summary (the window, and the highest and latest rates), kept up
+  to date. Tab to the graph and use the left and right arrow keys to read values along
+  it (Shift for bigger steps, Home and End for the ends, Escape to stop); the readout is
+  announced as it changes.
+- Everything you can Tab to has a visible focus outline.
+- In a Windows contrast theme the graph and badges use the theme's colours.
+- Settings announces Test connection results, errors, Find gateway and update status.
 
 ### Away from home
 
@@ -100,8 +149,11 @@ go Away. It keeps retrying, backing off to once a minute, and recovers by itself
 | "The gateway rejected the API key" | The key is wrong or was deleted. Create a new one and paste it in Settings |
 | "The gateway has no site with that name" | The site in Settings is not `default`. Use the site's name as shown in the UniFi Network app |
 | "Can't reach the gateway" | Wrong address, or this PC is not on the gateway's network. Away mode takes over after about 30 seconds if you have left it |
+| "No answer from the gateway within 8 seconds" | The gateway is busy or restarting, or the address answers but slowly. The widget retries and backs off on its own |
+| "This is a legacy self-hosted UniFi Network Server" | Shown by Test connection. That server has no API keys, so the widget cannot use it (see Requirements) |
 | "The gateway's certificate has changed" | The gateway regenerated its certificate. If you expected that, press **Forget pinned certificate** in Settings |
 | "No recent data" | The widget has not heard from the gateway for 15 seconds. It dims and recovers on its own |
+| "History unavailable" on 24h or 7d | The gateway could not be asked for its history, for example while Away. The 5m and 1h windows keep working |
 | Uptime or Latency shows `-` | The gateway did not report it. Older Network versions may not; check for an update |
 
 Settings has **Test connection** and **Open log folder**; attach the log when reporting

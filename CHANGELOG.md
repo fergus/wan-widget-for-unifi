@@ -3,8 +3,15 @@
 All notable changes to WAN Widget for UniFi. Versions follow
 [semantic versioning](https://semver.org/).
 
-## Unreleased
+## 0.3.0 - 2026-10-22
 
+- Windows notifications when the internet goes down and comes back, when your public IP
+  changes, when the gateway stops answering for over a minute, and when a new version
+  is available. Each can be turned off in Settings > Notifications.
+- Accessibility: screen readers hear "Download" and "Upload" rather than arrows, get a
+  text summary of the graph and the detail behind each figure, and can read the graph
+  with the arrow keys. Visible focus outlines, Windows contrast themes for the graph,
+  and Settings announces results and errors.
 - Richer graph: switch between the last 5 minutes, hour, 24 hours and 7 days with the
   buttons over the graph. 24 hours and 7 days come from the gateway's own 5-minute and
   hourly averages, so they are there straight after a restart. Hover the graph to read
@@ -19,6 +26,7 @@ All notable changes to WAN Widget for UniFi. Versions follow
   UniFi Network Server, which has no API keys and cannot be used.
 - Dual-WAN gateways: the second WAN's latency and availability show in the latency
   tooltip when the gateway reports them. Not yet confirmed on dual-WAN hardware.
+- Windows now lists the publisher as "fergus" under Installed apps (it said "github").
 - Fixed a run of spaces in the middle of Test connection's timezone warning.
 
 ## 0.2.0 - 2026-10-20

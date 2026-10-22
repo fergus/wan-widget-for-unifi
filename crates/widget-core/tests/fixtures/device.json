@@ -4,6 +4,7 @@
 {"type":"uap","model":"U7PG2","name":"AP1","uptime":15122955,"wan1":null,
  "uplink":{"type":"wire","up":true,"uplink_source":"lldp_uplink"}},
 {"type":"udm","model":"UDRULT","name":"UCG Ultra","uptime":3235463,
+ "last_wan_status":{"WAN":"online"},
  "wan1":{"latency":11,"availability":100,"up":true,"ip":"100.96.0.10","name":"eth4","type":"ethernet"},
  "uplink":{"comment":"WAN","drops":3,"ip":"100.96.0.10","latency":8,"name":"eth4","up":true,"uptime":106380,"type":"wire","uplink_source":"legacy"}}
 ]}

@@ -9,15 +9,17 @@ use std::time::Duration;
 use chrono::Utc;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
-use widget_core::{ip, settings::Settings, unifi, usage};
+use widget_core::{alerts, ip, settings::Settings, unifi, usage};
 
 use crate::errors::{self, Failure, Peer};
-use crate::{config, pin};
+use crate::{config, notify, pin};
 
 const MONTHLY_EVERY: Duration = Duration::from_secs(300);
 const MONTHLY_RETRY: Duration = Duration::from_secs(60);
 const IP_EVERY: Duration = Duration::from_secs(300);
 const UPTIME_EVERY: Duration = Duration::from_secs(60);
+/// How long the gateway must stay unreachable (on the home network) before a notification.
+const GATEWAY_NOTIFY_AFTER: Duration = Duration::from_secs(60);
 /// Consecutive unreachable polls, with the PC's address changed, before the widget decides
 /// it has left the gateway's network and pauses.
 const AWAY_AFTER: u32 = 3;
@@ -404,6 +406,14 @@ pub async fn run(app: AppHandle) {
     let mut gateway: Option<reqwest::Client> = None;
     // The gateway's own timezone, used when the timezone setting is blank.
     let mut gateway_tz: Option<String> = None;
+    // Notifications: each WAN's last known state and when it went down, when the gateway
+    // stopped answering, and the public IP last seen (also across restarts).
+    let mut wan_online: std::collections::BTreeMap<String, bool> = Default::default();
+    let mut wan_down_since: std::collections::BTreeMap<String, std::time::Instant> =
+        Default::default();
+    let mut gateway_down_since: Option<std::time::Instant> = None;
+    let mut gateway_notified = false;
+    let mut public_ip = notify::last_public_ip(&app);
 
     loop {
         // Settings saves set the flag, so changes apply without a restart.
@@ -450,6 +460,19 @@ pub async fn run(app: AppHandle) {
             Ok(h) => {
                 if failures > 0 {
                     log::info!("gateway reachable again after {failures} failed polls");
+                }
+                if let Some(since) = gateway_down_since.take() {
+                    if gateway_notified && s.notify.gateway {
+                        notify::send(
+                            &app,
+                            "Gateway reachable again",
+                            &format!(
+                                "Your gateway is answering again after {}.",
+                                alerts::format_outage(since.elapsed().as_secs())
+                            ),
+                        );
+                    }
+                    gateway_notified = false;
                 }
                 failures = 0;
                 unreachable_streak = 0;
@@ -499,6 +522,42 @@ pub async fn run(app: AppHandle) {
                                 *g = Some(u.clone());
                             }
                             let _ = app.emit("wan-uptime", u);
+                            let now_online =
+                                alerts::wan_online(&g.wan_status, h.internet_status.as_deref());
+                            for change in alerts::wan_changes(&wan_online, &now_online) {
+                                let label = alerts::wan_label(&change.name);
+                                if change.online {
+                                    let down = wan_down_since.remove(&change.name);
+                                    if s.notify.wan {
+                                        let after = down
+                                            .map(|t| {
+                                                format!(
+                                                    " after {}",
+                                                    alerts::format_outage(t.elapsed().as_secs())
+                                                )
+                                            })
+                                            .unwrap_or_default();
+                                        notify::send(
+                                            &app,
+                                            "Internet back",
+                                            &format!("{label} is back online{after}."),
+                                        );
+                                    }
+                                } else {
+                                    wan_down_since
+                                        .insert(change.name.clone(), std::time::Instant::now());
+                                    if s.notify.wan {
+                                        notify::send(
+                                            &app,
+                                            "Internet down",
+                                            &format!(
+                                                "{label} is offline, according to your gateway."
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
+                            wan_online = now_online;
                         }
                         Err(e) => log::warn!("wan uptime: {e}"),
                     }
@@ -515,7 +574,28 @@ pub async fn run(app: AppHandle) {
                 } else {
                     0
                 };
+                if e.unreachable {
+                    let since = *gateway_down_since.get_or_insert_with(std::time::Instant::now);
+                    if !gateway_notified
+                        && since.elapsed() >= GATEWAY_NOTIFY_AFTER
+                        && s.notify.gateway
+                        // Off the home network is Away, not an unreachable gateway.
+                        && !should_go_away(unreachable_streak, home_ip, local_ip())
+                    {
+                        notify::send(
+                            &app,
+                            "Can't reach your gateway",
+                            &format!(
+                                "No answer from {} for over a minute. The widget keeps trying.",
+                                s.gateway_url
+                            ),
+                        );
+                        gateway_notified = true;
+                    }
+                }
                 if should_go_away(unreachable_streak, home_ip, local_ip()) {
+                    gateway_down_since = None;
+                    gateway_notified = false;
                     wait_until_back(&app, &latest).await;
                     // Connections and cached values are from the other network.
                     failures = 0;
@@ -579,6 +659,22 @@ pub async fn run(app: AppHandle) {
                 wan: v.wan.map(|i| i.to_string()),
                 cgnat: v.cgnat,
             };
+            if let Some(now_ip) = info.external.as_deref() {
+                if alerts::ip_changed(public_ip.as_deref(), Some(now_ip)) && s.notify.ip {
+                    notify::send(
+                        &app,
+                        "Public IP changed",
+                        &format!(
+                            "Your public IP is now {now_ip} (it was {}).",
+                            public_ip.as_deref().unwrap_or("unknown")
+                        ),
+                    );
+                }
+                if public_ip.as_deref() != Some(now_ip) {
+                    notify::save_public_ip(&app, now_ip);
+                    public_ip = Some(now_ip.to_string());
+                }
+            }
             if let Ok(mut g) = latest.ip.lock() {
                 *g = Some(info.clone());
             }

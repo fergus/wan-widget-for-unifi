@@ -23,6 +23,22 @@ const canvas = $("graph");
 const ctx = canvas.getContext("2d");
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
+/**
+ * Sets a footer figure's tooltip (null removes it) and the same text, read in order after
+ * the figure, for screen readers, which do not reliably read tooltips on plain text.
+ */
+function setDetail(id, text) {
+  const el = $(id);
+  if (text) {
+    if (el.title !== text) el.title = text;
+  } else {
+    el.removeAttribute("title");
+  }
+  const sr = $(id + "-detail");
+  const spoken = text ? ", " + text.replace(/\u2193/g, "download").replace(/\u2191/g, "upload").replace(/\s+\/\s+/g, ", ").replace(/\n/g, ". ") : "";
+  if (sr.textContent !== spoken) sr.textContent = spoken;
+}
+
 let samples = [];
 
 // Size the backing store to the screen's pixels so lines stay sharp at 125-200% scaling.
@@ -74,6 +90,7 @@ function draw() {
 
   // Solid baseline; dashed grid lines at the top of the scale and at 50%, labelled.
   ctx.strokeStyle = css("--muted");
+  ctx.lineWidth = 1;
   ctx.globalAlpha = 0.25;
   ctx.beginPath();
   ctx.moveTo(0, h - 0.5);
@@ -88,15 +105,6 @@ function draw() {
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
-  if (points.length) {
-    ctx.fillStyle = css("--muted");
-    ctx.font = "10px 'Segoe UI', system-ui, sans-serif";
-    ctx.textBaseline = "bottom";
-    // The hover readout sits over the top label, so that one steps aside while hovering.
-    if (hoverX === null) ctx.fillText(topLabel, 0, Math.round(y(top)) - 1);
-    ctx.fillText(halfLabel, 0, Math.round(y(top / 2)) - 1);
-  }
-
   for (const [key, color] of [["rx", "--down"], ["tx", "--up"]]) {
     ctx.strokeStyle = css(color);
     ctx.lineWidth = 1.5;
@@ -117,11 +125,29 @@ function draw() {
     }
   }
 
+  if (points.length) {
+    ctx.fillStyle = css("--muted");
+    ctx.font = "10px 'Segoe UI', system-ui, sans-serif";
+    ctx.textBaseline = "bottom";
+    // Drawn over the lines, with a halo in the card colour, so they stay readable.
+    ctx.strokeStyle = css("--bg");
+    ctx.lineWidth = 3;
+    ctx.lineJoin = "round";
+    const label = (text, ly) => {
+      ctx.strokeText(text, 1, ly);
+      ctx.fillText(text, 1, ly);
+    };
+    // The hover readout sits over the top label, so that one steps aside while hovering.
+    if (hoverX === null) label(topLabel, Math.round(y(top)) - 1);
+    label(halfLabel, Math.round(y(top / 2)) - 1);
+  }
+
   // Hover: a crosshair on the nearest point and its values in the readout.
   const p = hoverX === null ? null : nearestPoint(points, end - (1 - hoverX) * v.span);
   if (p) {
     const px = Math.round(x(p.t)) + 0.5;
     ctx.strokeStyle = css("--muted");
+    ctx.lineWidth = 1;
     ctx.globalAlpha = 0.6;
     ctx.beginPath();
     ctx.moveTo(px, 0);
@@ -136,6 +162,25 @@ function draw() {
     }
   }
   showReadout(p, v);
+  describeGraph(points, v, topLabel);
+}
+
+const WINDOW_NAMES = { "5m": "last 5 minutes, live", "1h": "last hour, live", "24h": "last 24 hours, 5-minute averages", "7d": "last 7 days, hourly averages" };
+
+/** The graph's accessible name: the window and the highest and latest rates in it. */
+function describeGraph(points, v, topLabel) {
+  let text = "Throughput graph, " + WINDOW_NAMES[view] + ".";
+  if (points.length) {
+    const last = points[points.length - 1];
+    const peak = (k) => Math.max(...points.map((p) => p[k]));
+    text +=
+      " Download peak " + formatRate(peak("rx")) + ", latest " + formatRate(last.rx) + "." +
+      " Upload peak " + formatRate(peak("tx")) + ", latest " + formatRate(last.tx) + "." +
+      " Scale up to " + topLabel + ".";
+  } else {
+    text += " No data yet.";
+  }
+  if (canvas.getAttribute("aria-label") !== text) canvas.setAttribute("aria-label", text);
 }
 
 /** The readout over the graph: hovered values, else loading or error text for history. */
@@ -198,8 +243,8 @@ function onRates({ rx, tx, latency, monitors, availability_pct: availability, av
   const now = Date.now();
   samples = trimBefore(samples.concat([{ t: now, rx, tx }]), now - LIVE_KEEP_MS, LIVE_MAX);
   latencies = pushSample(latencies, { v: typeof latency === "number" ? latency : null, t: Date.now() }, MAX_POINTS);
-  $("rx").textContent = "\u2193 " + formatRate(rx);
-  $("tx").textContent = "\u2191 " + formatRate(tx);
+  $("rx").textContent = formatRate(rx);
+  $("tx").textContent = formatRate(tx);
   $("latency").textContent = formatLatency(latency);
   showLatencyTip(monitors || [], availability, period, wan2);
   draw();
@@ -219,7 +264,7 @@ function showLatencyTip(monitors, availability, period, wan2) {
   }
   lines.push(...secondWanLines(wan2));
   const tip = lines.join("\n");
-  if ($("latency").title !== tip) $("latency").title = tip;
+  setDetail("latency", tip);
 }
 
 // Seconds the WAN link had been up when last fetched (every 60 s), and when that was.
@@ -249,7 +294,7 @@ function showUptime(stale = false) {
   const el = $("uptime");
   if (!uptime || away || stale) {
     el.textContent = "-";
-    el.removeAttribute("title"); // fall back to the field's general tooltip
+    setDetail("uptime", null); // fall back to the field's general tooltip
     return;
   }
   const elapsed = (Date.now() - uptime.at) / 1000;
@@ -262,7 +307,7 @@ function showUptime(stale = false) {
   ].filter(Boolean).join("\n");
   // Only written when changed (about once a minute), so an open tooltip does not flicker.
   if (el.textContent !== text) el.textContent = text;
-  if (el.title !== tip) el.title = tip;
+  setDetail("uptime", tip);
 }
 
 // Away: the gateway is not reachable from this network, so polling is paused. Keep the
@@ -280,7 +325,7 @@ function onAway(isAway) {
     $("tx").textContent = "";
     latencies = [];
     $("latency").textContent = "-";
-    $("latency").removeAttribute("title"); // fall back to the field's general tooltip
+    setDetail("latency", null); // fall back to the field's general tooltip
     $("status").hidden = true;
     draw();
   } else {
@@ -293,12 +338,12 @@ function onAway(isAway) {
 
 function onMonthly({ rx, tx }) {
   $("month").textContent = formatBytes(rx + tx);
-  $("month").title = "\u2193 " + formatBytes(rx) + "  /  \u2191 " + formatBytes(tx);
+  setDetail("month", "\u2193 " + formatBytes(rx) + "  /  \u2191 " + formatBytes(tx));
 }
 
 function onIp({ external, wan, cgnat }) {
   $("ip").textContent = external || wan || "-";
-  $("ip").title = [external && "Public IP " + external, wan && "Gateway WAN " + wan].filter(Boolean).join("  /  ");
+  setDetail("ip", [external && "Public IP " + external, wan && "Gateway WAN " + wan].filter(Boolean).join("  /  "));
   $("cgnat").hidden = !cgnat;
   $("cgnat").title = wan ? "Gateway WAN address is " + wan : "";
 }
@@ -320,6 +365,22 @@ canvas.addEventListener("mousemove", (e) => {
   draw();
 });
 canvas.addEventListener("mouseleave", () => {
+  hoverX = null;
+  draw();
+});
+// Keyboard: arrows move the readout along the graph (Shift for bigger steps), Home and
+// End jump to the ends, Escape stops. The readout is a live region, so it is announced.
+canvas.addEventListener("keydown", (e) => {
+  const step = e.shiftKey ? 0.1 : 0.02;
+  const at = hoverX === null ? 1 : hoverX;
+  const moves = { ArrowLeft: at - step, ArrowRight: at + step, Home: 0, End: 1 };
+  if (e.key in moves) hoverX = Math.min(1, Math.max(0, moves[e.key]));
+  else if (e.key === "Escape") hoverX = null;
+  else return;
+  e.preventDefault();
+  draw();
+});
+canvas.addEventListener("blur", () => {
   hoverX = null;
   draw();
 });
@@ -382,8 +443,8 @@ if (tauri && tauri.event) {
   setInterval(() => {
     t += 1;
     onRates({
-      rx: Math.max(0, 600_000 + 400_000 * Math.sin(t / 6) + Math.random() * 150_000),
-      tx: Math.max(0, 150_000 + 90_000 * Math.sin(t / 4) + Math.random() * 40_000),
+      rx: Math.max(0, 600_000 + 400_000 * Math.sin(t / 45) + Math.random() * 150_000),
+      tx: Math.max(0, 150_000 + 90_000 * Math.sin(t / 30) + Math.random() * 40_000),
       latency: 9 + Math.round(Math.random() * 6),
       monitors: [
         { target: "www.microsoft.com", latency: 10 },

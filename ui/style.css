@@ -46,6 +46,10 @@ canvas { display: block; width: 100%; height: 110px; cursor: crosshair; }
 #views { position: absolute; top: 0; right: 0; display: flex; gap: 1px; }
 #views button { padding: 0 4px; border: 0; border-radius: 4px; background: none; color: var(--muted); font: 600 10px/16px "Segoe UI", system-ui, sans-serif; cursor: pointer; }
 #views button:hover, #views button:focus-visible { color: var(--fg); }
+/* Visible keyboard focus on everything reachable with Tab. */
+#gear:focus-visible, #views button:focus-visible, canvas:focus-visible, .status[tabindex]:focus-visible { outline: 2px solid var(--up); outline-offset: 1px; border-radius: 3px; }
+/* Text for screen readers only. */
+.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 #views button[aria-pressed="true"] { background: var(--muted); color: var(--bg); opacity: 0.9; }
 /* Hover values (or history status), top left over the graph. */
 #readout { position: absolute; top: 0; left: 0; max-width: calc(100% - 90px); padding: 0 4px; border-radius: 4px; background: var(--bg); color: var(--fg); font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
@@ -60,3 +64,20 @@ footer span:not(.label):not(.badge) { color: var(--fg); }
 /* Away from the home network: everything shown is the last known value, so dim it all. */
 .card.away canvas, .card.away .rate, .card.away footer { opacity: 0.4; }
 .card.away #rx { color: var(--fg); }
+/* Away replaces the rates with one word: no arrows, labels or upload figure. */
+.card.away .rate [aria-hidden], .card.away .rate .sr, .card.away .rate.up { display: none; }
+/* Windows high contrast: the canvas does not follow forced colours by itself, so point
+   the palette (which the graph reads) at the system colours. */
+@media (forced-colors: active) {
+  :root, :root[data-theme] {
+    --bg: Canvas;
+    --fg: CanvasText;
+    --muted: GrayText;
+    --down: Highlight;
+    --up: LinkText;
+    --warn: Mark;
+    --on-warn: MarkText;
+  }
+  .badge { border: 1px solid CanvasText; }
+  #views button[aria-pressed="true"] { border: 1px solid Highlight; }
+}
