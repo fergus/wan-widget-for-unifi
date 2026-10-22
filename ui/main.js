@@ -90,6 +90,7 @@ function draw() {
 
   // Solid baseline; dashed grid lines at the top of the scale and at 50%, labelled.
   ctx.strokeStyle = css("--muted");
+  ctx.lineWidth = 1;
   ctx.globalAlpha = 0.25;
   ctx.beginPath();
   ctx.moveTo(0, h - 0.5);
@@ -104,15 +105,6 @@ function draw() {
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
-  if (points.length) {
-    ctx.fillStyle = css("--muted");
-    ctx.font = "10px 'Segoe UI', system-ui, sans-serif";
-    ctx.textBaseline = "bottom";
-    // The hover readout sits over the top label, so that one steps aside while hovering.
-    if (hoverX === null) ctx.fillText(topLabel, 0, Math.round(y(top)) - 1);
-    ctx.fillText(halfLabel, 0, Math.round(y(top / 2)) - 1);
-  }
-
   for (const [key, color] of [["rx", "--down"], ["tx", "--up"]]) {
     ctx.strokeStyle = css(color);
     ctx.lineWidth = 1.5;
@@ -133,11 +125,29 @@ function draw() {
     }
   }
 
+  if (points.length) {
+    ctx.fillStyle = css("--muted");
+    ctx.font = "10px 'Segoe UI', system-ui, sans-serif";
+    ctx.textBaseline = "bottom";
+    // Drawn over the lines, with a halo in the card colour, so they stay readable.
+    ctx.strokeStyle = css("--bg");
+    ctx.lineWidth = 3;
+    ctx.lineJoin = "round";
+    const label = (text, ly) => {
+      ctx.strokeText(text, 1, ly);
+      ctx.fillText(text, 1, ly);
+    };
+    // The hover readout sits over the top label, so that one steps aside while hovering.
+    if (hoverX === null) label(topLabel, Math.round(y(top)) - 1);
+    label(halfLabel, Math.round(y(top / 2)) - 1);
+  }
+
   // Hover: a crosshair on the nearest point and its values in the readout.
   const p = hoverX === null ? null : nearestPoint(points, end - (1 - hoverX) * v.span);
   if (p) {
     const px = Math.round(x(p.t)) + 0.5;
     ctx.strokeStyle = css("--muted");
+    ctx.lineWidth = 1;
     ctx.globalAlpha = 0.6;
     ctx.beginPath();
     ctx.moveTo(px, 0);
@@ -433,8 +443,8 @@ if (tauri && tauri.event) {
   setInterval(() => {
     t += 1;
     onRates({
-      rx: Math.max(0, 600_000 + 400_000 * Math.sin(t / 6) + Math.random() * 150_000),
-      tx: Math.max(0, 150_000 + 90_000 * Math.sin(t / 4) + Math.random() * 40_000),
+      rx: Math.max(0, 600_000 + 400_000 * Math.sin(t / 45) + Math.random() * 150_000),
+      tx: Math.max(0, 150_000 + 90_000 * Math.sin(t / 30) + Math.random() * 40_000),
       latency: 9 + Math.round(Math.random() * 6),
       monitors: [
         { target: "www.microsoft.com", latency: 10 },

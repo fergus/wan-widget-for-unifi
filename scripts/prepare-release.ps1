@@ -72,7 +72,12 @@ if ([version]$Version -le [version]$current) {
 
 Step "Bumping $current -> $Version"
 $date = Get-Date -Format 'yyyy-MM-dd'
-WriteText 'CHANGELOG.md' ([regex]::Replace($changelog, '(?m)^## Unreleased[ \t]*$', "## $Version - $date", 1))
+# `(?=\r?$)`: with CRLF line endings `$` matches before the `\n`, after the `\r`.
+$dated = [regex]::Replace($changelog, '(?m)^## Unreleased[ \t]*(?=\r?$)', "## $Version - $date", 1)
+if ($dated -eq $changelog) {
+    throw 'Could not rename the "## Unreleased" heading in CHANGELOG.md.'
+}
+WriteText 'CHANGELOG.md' $dated
 WriteText 'src-tauri/Cargo.toml' ([regex]::Replace($cargo, '(?m)^version = ".+"', "version = `"$Version`"", 1))
 
 # A normal (unlocked) build rewrites the app's entry in Cargo.lock.

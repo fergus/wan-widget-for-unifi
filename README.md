@@ -2,7 +2,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/widget-dark.png">
-  <img src="docs/images/widget-light.png" width="360" alt="The widget: download 2.8 Mbit/s and upload 2.0 Mbit/s above a live graph, with 463.0 GB used this month, 1d 5h uptime, a public IP with a CGNAT badge and 10 ms latency">
+  <img src="docs/images/widget-light.png" width="360" alt="The widget: download 8.0 Mbit/s and upload 2.1 Mbit/s above the last 5 minutes of throughput, with the scale lines at 10 and 5 Mbit/s and buttons for 5m, 1h, 24h and 7d; below, 463.0 GB used this month, 1d 5h uptime, a public IP with a CGNAT badge and 11 ms latency">
 </picture>
 
 A small Windows 11 desktop widget that shows, from your UniFi gateway's local API:
@@ -149,8 +149,11 @@ go Away. It keeps retrying, backing off to once a minute, and recovers by itself
 | "The gateway rejected the API key" | The key is wrong or was deleted. Create a new one and paste it in Settings |
 | "The gateway has no site with that name" | The site in Settings is not `default`. Use the site's name as shown in the UniFi Network app |
 | "Can't reach the gateway" | Wrong address, or this PC is not on the gateway's network. Away mode takes over after about 30 seconds if you have left it |
+| "No answer from the gateway within 8 seconds" | The gateway is busy or restarting, or the address answers but slowly. The widget retries and backs off on its own |
+| "This is a legacy self-hosted UniFi Network Server" | Shown by Test connection. That server has no API keys, so the widget cannot use it (see Requirements) |
 | "The gateway's certificate has changed" | The gateway regenerated its certificate. If you expected that, press **Forget pinned certificate** in Settings |
 | "No recent data" | The widget has not heard from the gateway for 15 seconds. It dims and recovers on its own |
+| "History unavailable" on 24h or 7d | The gateway could not be asked for its history, for example while Away. The 5m and 1h windows keep working |
 | Uptime or Latency shows `-` | The gateway did not report it. Older Network versions may not; check for an update |
 
 Settings has **Test connection** and **Open log folder**; attach the log when reporting

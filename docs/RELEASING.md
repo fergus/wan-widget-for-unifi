@@ -57,15 +57,15 @@ If the UI changed, update `README.md` and the screenshots in `docs/images/`:
   `python -m http.server 5317 --directory ui`). The page uses synthetic data and accepts `?theme=dark`,
   `?theme=light`, `?away` and `?nowan`.
 - Capture at 2x so the images stay sharp. With the preview running, headless Edge can
-  render a transparent PNG; wait for the 150-point graph to fill with a virtual time
-  budget:
+  render a transparent PNG. The graph places samples by time across its 5-minute
+  window, so give it 5 minutes of virtual time to fill (`--virtual-time-budget=300000`):
 
   ```powershell
-  & "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --headless=new --disable-gpu --hide-scrollbars --default-background-color=00000000 --force-device-scale-factor=2 --window-size=360,206 --virtual-time-budget=90000 --user-data-dir=$env:TEMP\edge-shots --screenshot=docs\images\widget-dark.png "http://localhost:5317/?theme=dark"
+  & "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --headless=new --disable-gpu --hide-scrollbars --default-background-color=00000000 --force-device-scale-factor=2 --window-size=360,206 --virtual-time-budget=300000 --user-data-dir=$env:TEMP\edge-shots --screenshot=docs\images\widget-dark.png "http://localhost:5317/?theme=dark"
   ```
 
   Use a new `--user-data-dir` each time, or Edge serves a cached stylesheet. The
-  window height must match the card: 206 for the normal card, 228 for Away.
+  window height must match the card: 206 for the normal card, 227 for Away.
 - Re-read the README against what changed. Check the troubleshooting table still
   matches the messages in `src-tauri/src/errors.rs`.
 

@@ -3,7 +3,7 @@
 All notable changes to WAN Widget for UniFi. Versions follow
 [semantic versioning](https://semver.org/).
 
-## Unreleased
+## 0.3.0 - 2026-10-22
 
 - Windows notifications when the internet goes down and comes back, when your public IP
   changes, when the gateway stops answering for over a minute, and when a new version
