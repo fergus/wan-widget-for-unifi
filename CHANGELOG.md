@@ -26,6 +26,7 @@ All notable changes to WAN Widget for UniFi. Versions follow
   UniFi Network Server, which has no API keys and cannot be used.
 - Dual-WAN gateways: the second WAN's latency and availability show in the latency
   tooltip when the gateway reports them. Not yet confirmed on dual-WAN hardware.
+- Windows now lists the publisher as "fergus" under Installed apps (it said "github").
 - Fixed a run of spaces in the middle of Test connection's timezone warning.
 
 ## 0.2.0 - 2026-10-20
