@@ -20,6 +20,8 @@ start with Windows.
 
 > Not affiliated with or endorsed by Ubiquiti Inc. UniFi is a trademark of Ubiquiti Inc.
 
+> Built with the help of an AI coding assistant (Claude Code), with the author's review and testing.
+
 ## Requirements
 
 - Windows 11 (WebView2 is built in)
