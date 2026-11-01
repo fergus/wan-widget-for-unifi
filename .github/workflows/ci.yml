@@ -40,6 +40,8 @@ jobs:
           node-version: 22
       - run: npm test
         working-directory: ui
+      - run: node --test
+        working-directory: omarchy
 
   app:
     name: Windows app

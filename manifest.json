@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.fergus.wan-widget-for-unifi",
+  "name": "WAN Widget for UniFi",
+  "version": "0.1.0",
+  "author": "Fergus Stevens",
+  "license": "MIT OR Apache-2.0",
+  "repository": "https://github.com/fergus/wan-widget-for-unifi",
+  "description": "Live WAN throughput, monthly usage, public IP, uptime and latency from your UniFi gateway, in the Omarchy bar. Needs curl and openssl; talks only to your gateway (and an IP lookup service, if enabled).",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "omarchy/BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "UniFi WAN",
+    "description": "WAN download and upload rates with a throughput graph, usage, IP, uptime and latency.",
+    "category": "Info",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "gatewayUrl": "https://192.168.1.1",
+      "site": "default",
+      "billingDay": 1,
+      "pollSeconds": 3,
+      "ipLookupUrl": "https://api.ipify.org"
+    },
+    "schema": [
+      {
+        "key": "gatewayUrl",
+        "type": "string",
+        "label": "Gateway address",
+        "description": "https://host, or https://host:11443 for UniFi OS Server.",
+        "defaultValue": "https://192.168.1.1"
+      },
+      {
+        "key": "site",
+        "type": "string",
+        "label": "Site",
+        "description": "The site id from the UniFi API, usually default.",
+        "defaultValue": "default"
+      },
+      {
+        "key": "billingDay",
+        "type": "integer",
+        "label": "Billing day",
+        "description": "Day of the month your ISP's month starts. Uses this PC's timezone.",
+        "min": 1,
+        "max": 31,
+        "step": 1,
+        "defaultValue": 1
+      },
+      {
+        "key": "pollSeconds",
+        "type": "integer",
+        "label": "Poll interval (seconds)",
+        "min": 1,
+        "max": 60,
+        "step": 1,
+        "defaultValue": 3
+      },
+      {
+        "key": "ipLookupUrl",
+        "type": "string",
+        "label": "Public IP lookup URL",
+        "description": "Used to show your real public IP behind CGNAT. Leave empty to disable.",
+        "defaultValue": "https://api.ipify.org"
+      }
+    ]
+  }
+}
