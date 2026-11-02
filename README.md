@@ -18,6 +18,9 @@ A small Windows 11 desktop widget that shows, from your UniFi gateway's local AP
 It sits on top of other windows or pins to the desktop, lives in the tray, and can
 start with Windows.
 
+On Linux with [Omarchy](https://omarchy.org/), the same figures are available as a
+[bar plugin](#omarchy-bar-plugin) instead.
+
 > Not affiliated with or endorsed by Ubiquiti Inc. UniFi is a trademark of Ubiquiti Inc.
 
 > Built with the help of an AI coding assistant (Claude Code), with the author's review and testing.
@@ -167,6 +170,58 @@ The widget talks to your gateway and, for the public IP, to `https://api.ipify.o
 every 5 minutes. You can change the lookup address or turn it off in Settings. Nothing
 else leaves your network.
 
+## Omarchy bar plugin
+
+On [Omarchy](https://omarchy.org/) (Linux) the same figures are available as a bar
+plugin that takes its colours and font from your theme. It is separate from the Windows
+app and shares only the gateway API notes in [docs/DESIGN.md](docs/DESIGN.md).
+
+- **Bar pill:** live download and upload, e.g. `↓8.0M ↑2.1M`. It dims when the gateway
+  has not answered for 15 seconds, and shows an icon only on a vertical bar. Middle-click
+  refreshes.
+- **Popup (click the pill):** the 5m, 1h, 24h and 7d graph with a hover readout, month
+  usage, uptime, public IP with a CGNAT note, and latency per target with 24-hour
+  availability. Esc closes it.
+
+### Install
+
+```bash
+omarchy plugin add https://github.com/fergus/wan-widget-for-unifi.git --enable
+```
+
+Needs `curl` and `openssl`. Click the pill and paste your UniFi API key into the box
+(create one under **Settings > Control Plane > Integrations**, as in [Setup](#setup)).
+**Change API key** at the bottom of the popup replaces it later. The key is saved to
+`~/.config/wan-widget-for-unifi/api-key`, readable only by you, and is never in
+`shell.json`.
+
+### Settings
+
+Set these on the widget's entry in `~/.config/omarchy/shell.json` (or in Omarchy's
+plugin settings); they apply on save.
+
+| Key | Default | |
+|---|---|---|
+| `gatewayUrl` | `https://192.168.1.1` | `https://host`, or `https://host:11443` for UniFi OS Server |
+| `site` | `default` | The site id from the UniFi API |
+| `billingDay` | `1` | Day your ISP's month starts. Uses this PC's timezone, not the gateway's |
+| `pollSeconds` | `3` | How often live rates are fetched |
+| `ipLookupUrl` | `https://api.ipify.org` | Shows your real public IP behind CGNAT. Empty turns the lookup off |
+
+### Certificate and troubleshooting
+
+Like the Windows app, the plugin pins the gateway's certificate on first connection
+(`~/.local/state/wan-widget-for-unifi/pin`) and refuses a different one later. If you
+replace the certificate, forget the pin:
+
+```bash
+~/.config/omarchy/plugins/io.github.fergus.wan-widget-for-unifi/omarchy/wan-fetch forget
+```
+
+The popup's status line says what is wrong: no key saved, certificate unreadable or
+changed, wrong site or key, or gateway unreachable. The Omarchy shell log
+(`qs log`) shows QML errors. The plugin has no notifications or "Away" state.
+
 ## Configuration files
 
 Settings live in `%APPDATA%\io.github.fergus.unifi-widget\settings.json` (see
@@ -192,12 +247,14 @@ off and on again after moving the app.
 | `crates/widget-core` | Parsing, billing-cycle maths, CGNAT detection, settings validation (no I/O) | Linux and Windows |
 | `ui/` | Static HTML/JS front end; opens in a plain browser with synthetic data | Anywhere (Node 22 for tests) |
 | `src-tauri/` | Tauri 2 shell: window, poller, tray, settings file, Credential Manager | Windows |
+| `omarchy/` | Omarchy bar plugin (QML, `Model.js`, `wan-fetch`); manifest at the repo root | Linux with Omarchy |
 
 Tests:
 
 ```
 cargo test            # widget-core
 cd ui && npm test     # graph helpers and formatters
+cd omarchy && node --test   # Omarchy plugin parsing and formatting
 ```
 
 The Windows app needs Rust, Node, WebView2 and the Visual Studio C++ build tools:

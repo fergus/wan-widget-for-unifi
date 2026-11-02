@@ -69,6 +69,30 @@ crates/widget-core (pure, no I/O, tested on Linux)
   settings struct, defaults, validate
 ```
 
+## Omarchy plugin
+
+A second front end for Linux, in `omarchy/`, with `manifest.json` at the repo root because
+`omarchy plugin add` expects it there. It reads the same endpoints as the table above but
+shares no code with the Rust crates.
+
+```
+BarWidget.qml  pill: rates, dimmed when stale
+Panel.qml      polling, popup, canvas graph, API key entry
+Model.js       pure parsing, billing-cycle sums, graph scale, formatting (node-tested)
+wan-fetch      curl wrapper: API key on stdin, certificate pin, `setkey`, `forget`
+```
+
+| Decision | Why |
+|---|---|
+| Pure QML, `curl` and bash, no compiled helper | `omarchy plugin add` clones the repo and runs no build step |
+| `Model.js` re-implements `unifi.rs`, `history.rs` and `usage.rs` parsing | QML cannot call the Rust crates. It is tested against the same fixtures in `crates/widget-core/tests/fixtures/`, so a change to a fixture breaks both |
+| API key in `~/.config/wan-widget-for-unifi/api-key` (mode 600), passed to curl with `--config -` on stdin | No keyring is guaranteed on Omarchy; keeps the key out of `shell.json` and the process list |
+| Pin the public key (`curl --pinnedpubkey`, with `--insecure` to skip the CA check) | Same trust-on-first-use model as the Windows app. It pins the public key rather than the whole certificate, so a renewed certificate with the same key still passes |
+| Billing cycle uses the PC's timezone | QML's JavaScript has no timezone database, so the gateway's zone from `stat/sysinfo` is not used |
+| Live samples kept in memory only (one hour) | Same as the Windows app; 24h and 7d come from the gateway reports |
+
+Not ported: notifications, the Away state, the update check and the gateway-timezone setting.
+
 ## Testing
 
 - `widget-core`: unit tests and recorded fixtures in `crates/widget-core/tests/fixtures/`
@@ -76,6 +100,8 @@ crates/widget-core (pure, no I/O, tested on Linux)
   envelope).
 - `ui`: pure functions tested with `node --test`. The pages open in a plain browser with
   synthetic data for layout checks.
+- `omarchy`: `Model.js` tested with `node --test` against the `widget-core` fixtures (CI
+  runs it). The QML and `wan-fetch` are checked by hand on a running Omarchy shell.
 - `src-tauri`: kept thin. A mock HTTP server test for the poller is still to do.
 
 ## Open risks
@@ -87,6 +113,10 @@ crates/widget-core (pure, no I/O, tested on Linux)
   the cycle boundary by hours. Test connection warns when they differ.
 - **Monthly figure lag.** If the controller updates the current day's bucket only
   hourly, the monthly total lags by up to an hour.
+- **Omarchy pin is of the public key.** Unlike the Windows app it does not notice a new
+  certificate that reuses the same key.
+- **Omarchy shell caches QML.** After editing the plugin, `omarchy restart shell` is
+  needed; a rescan alone can keep serving the old file.
 - **Polling cost.** Polling `stat/health` every 2 s is assumed cheap for the gateway but
   has not been measured.
 - **API changes.** A UniFi release can change or remove the classic endpoints. The

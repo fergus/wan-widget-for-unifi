@@ -3,6 +3,13 @@
 All notable changes to WAN Widget for UniFi. Versions follow
 [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+- Omarchy: a bar plugin for Linux (Omarchy / Quickshell) with the same figures and
+  graph in the Omarchy theme: live rates in the bar, and a popup with the 5m, 1h, 24h
+  and 7d graph, month usage, uptime, IP and per-target latency. Paste the API key into
+  the popup. See "Omarchy bar plugin" in the README.
+
 ## 0.3.0 - 2026-10-22
 
 - Windows notifications when the internet goes down and comes back, when your public IP

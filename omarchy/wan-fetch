@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Fetches one UniFi Network API path for the Omarchy plugin and prints the body.
+#
+#   wan-fetch GET  <gateway-url> <path>
+#   wan-fetch POST <gateway-url> <path> <json-body>
+#   wan-fetch forget                      # drop the pinned certificate
+#   wan-fetch setkey                      # save the API key read from stdin
+#
+# The API key is read from $WAN_WIDGET_KEY_FILE (default
+# ~/.config/wan-widget-for-unifi/api-key) and handed to curl on stdin, so it never
+# appears in a process list. UniFi gateways use a self-signed certificate: the first
+# connection pins its public key (trust on first use) and later ones must match it.
+set -euo pipefail
+
+conf="${XDG_CONFIG_HOME:-$HOME/.config}/wan-widget-for-unifi"
+state="${XDG_STATE_HOME:-$HOME/.local/state}/wan-widget-for-unifi"
+key_file="${WAN_WIDGET_KEY_FILE:-$conf/api-key}"
+pin_file="$state/pin"
+
+if [[ ${1:-} == forget ]]; then
+  rm -f "$pin_file"
+  exit 0
+fi
+
+if [[ ${1:-} == setkey ]]; then
+  key=$(tr -d '[:space:]')
+  [[ -n $key ]] || { echo "empty API key" >&2; exit 12; }
+  mkdir -p "$(dirname "$key_file")"
+  (umask 077; printf '%s\n' "$key" > "$key_file")
+  exit 0
+fi
+
+method=${1:?method}
+gateway=${2:?gateway url}
+path=${3:?path}
+body=${4:-}
+
+[[ -r $key_file ]] || { echo "no API key at $key_file" >&2; exit 10; }
+key=$(tr -d '[:space:]' < "$key_file")
+[[ -n $key ]] || { echo "API key file is empty" >&2; exit 10; }
+
+gateway=${gateway%/}
+hostport=${gateway#*://}
+hostport=${hostport%%/*}
+[[ $hostport == *:* ]] || hostport="$hostport:443"
+
+if [[ ! -s $pin_file ]]; then
+  mkdir -p "$state"
+  pin=$(openssl s_client -connect "$hostport" -servername "${hostport%:*}" </dev/null 2>/dev/null \
+    | openssl x509 -pubkey -noout \
+    | openssl pkey -pubin -outform der \
+    | openssl dgst -sha256 -binary | base64)
+  [[ -n $pin ]] || { echo "could not read the gateway certificate" >&2; exit 11; }
+  echo "sha256//$pin" > "$pin_file"
+fi
+
+args=(--silent --show-error --max-time 10 --insecure --pinnedpubkey "$(<"$pin_file")" -X "$method")
+if [[ -n $body ]]; then
+  args+=(-H 'Content-Type: application/json' --data-binary "$body")
+fi
+
+curl "${args[@]}" --config - "$gateway$path" <<CONF
+header = "X-API-KEY: $key"
+CONF
